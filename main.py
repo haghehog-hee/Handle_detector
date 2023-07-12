@@ -20,7 +20,7 @@ while "models" in pathlib.Path.cwd().parts:
 
 
 PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\200objects\\saved_model"
-PATH_TO_LABELS = "C:\\Tensorflow\\workspace\\data\\label_map.pbtxt"
+PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map.pbtxt"
 
 category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
 
@@ -77,7 +77,7 @@ def show_inference(model, frame):
         output_dict['detection_scores'],
         category_index,
         max_boxes_to_draw=400,
-        min_score_thresh=.1,
+        min_score_thresh=.2,
         instance_masks=output_dict.get('detection_masks_reframed', None),
         use_normalized_coordinates=True,
         line_thickness=5)
@@ -105,7 +105,7 @@ def show_inference(model, frame):
 def Affine(img):
     rows, cols, ch = img.shape
     pts1 = np.float32([[9, 87], [1960, 111], [216, 1104], [1752, 1049]])
-    pts2 = np.float32([[0, 0], [1890, 0], [0, 1100], [1890, 1100]])
+    pts2 = np.float32([[0, 0], [1890, 0], [0, 1300], [1890, 1100]])
     M = cv2.getPerspectiveTransform(pts1, pts2)
     dst = cv2.warpPerspective(img, M, (1890, 1100))
     return (dst)

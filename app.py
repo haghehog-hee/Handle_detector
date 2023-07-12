@@ -29,7 +29,7 @@ btn2.pack(pady=40)
 canvheight=540
 canvwidth=960
 canvas = tk.Canvas(window, width=canvwidth, height=canvheight, bg='black')
-canvas.pack(anchor="nw", expand=True)
+canvas.pack(anchor="center", expand=True)
 def timer():
 
     global canvheight
