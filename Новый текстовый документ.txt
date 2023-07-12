@@ -1,0 +1,17 @@
+import cv2 as cv
+import numpy as np
+import matplotlib.pyplot as plt
+import glob
+
+
+img = cv.imread('Clipboard02.jpg')
+assert img is not None, "file could not be read, check with os.path.exists()"
+rows,cols,ch = img.shape
+pts1 = np.float32([[9,87],[1960,111],[216,964],[1752,999]])
+pts2 = np.float32([[0,0],[1890,0],[0,1100],[1890,1100]])
+M = cv.getPerspectiveTransform(pts1,pts2)
+dst = cv.warpPerspective(img,M,(1890,1100))
+cv.imwrite('Clip02.jpg',dst)
+plt.subplot(121),plt.imshow(img),plt.title('Input')
+plt.subplot(122),plt.imshow(dst),plt.title('Output')
+plt.show()
