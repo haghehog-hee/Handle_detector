@@ -1,54 +1,69 @@
 import tkinter as tk
-from PIL import ImageTk as itk
-from PIL import Image
-from detection import detect, numbers
+from detection import detect_and_count
 import cv2
+from ffmpegcv import VideoCaptureStream as VCS
+from PIL import ImageTk, Image
 
 window = tk.Tk()
 window.title("Test app")
-flag = False
+
+# when detection_flag = False - app shows camera stream in real time
+# when the flag = True - app shows image with detection boxes
+detection_flag = False 
 data = None
-label = tk.Label(window, text="Click the Button to update this Text",
-font=('Calibri 15 bold'))
+
+# label for displaying number of detections
+label = tk.Label(
+    window, text="", font=("Calibri 15 bold")
+)
 label.pack(pady=20)
-window.geometry('1000x1000')
+
+# set window size
+window.geometry("1000x1000")
+
+# Camera has two channels Channel_1 - full high resolution, it is used for detection
+# Channel_2 - preview low resolution, used in normal "stream" mode
+cap = VCS("rtsp://user08:Mrd12345678@2.1.3.33:554/1/2")
+
 def on_click_btn1():
-    d = numbers()
-    label["text"] = d
-def on_click_btn2():
-    label["text"] = "You clicked second button"
+    global data
+    global detection_flag
+    cap2 = VCS("rtsp://user08:Mrd12345678@2.1.3.33:554/1/1")
+    detection_flag = not detection_flag
+    if detection_flag:
+        _, frame = cap2.read()
+        data, num_handles = detect_and_count(frame)
+        label["text"] = str(num_handles)
 
-
-# Create 1st button to update the label widget
-btn1 = tk.Button(window, text="Button1", command=on_click_btn1)
+btn1 = tk.Button(window, text="Подсчет", command=on_click_btn1)
 btn1.pack(pady=20)
 
-# Create 2nd button to update the label widget
-btn2 = tk.Button(window, text="Button2", command=on_click_btn2)
-btn2.pack(pady=40)
-canvheight=540
-canvwidth=960
-canvas = tk.Canvas(window, width=canvwidth, height=canvheight, bg='black')
-canvas.pack(anchor="center", expand=True)
-def timer():
+stream_window = tk.Label(window)
+stream_window.pack()
 
-    global canvheight
-    global canvwidth
-    global canvas
-    global data
-    canvas.delete("all")
-    pimage = detect()
-    data = Image.fromarray(pimage)
-    data = data.resize((canvwidth, canvheight))
-    data = itk.PhotoImage(data)
-    # data = itk.PhotoImage(file='Clipboard02.jpg')
-    canvas.create_image(
-        (canvwidth / 2, canvheight / 2),
-        image=data
-    )
-    canvas.after(3000, timer)
+# define canvas dimensions
+canvheight = 540
+canvwidth = 960
 
+# define video stream function
+def video_stream():
+    global cap
+    global detection_flag
+    if detection_flag:
+        img = data
+        img = Image.fromarray(img)
+    else:
+        _, frame = cap.read()
+        cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
+        img = Image.fromarray(cv2image)
+    img = img.resize((canvwidth, canvheight))
+    imgtk = ImageTk.PhotoImage(image=img)
+    stream_window.imgtk = imgtk
+    stream_window.configure(image=imgtk)
+    stream_window.after(1, video_stream)
 
-canvas.after(1, timer)
+# initiate video stream
+video_stream()
 
+# run the tkinter main loop
 window.mainloop()

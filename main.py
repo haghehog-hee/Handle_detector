@@ -1,111 +1,200 @@
+import tkinter as tk
+from detection import detect_and_count, dumb_detection
+from cv2 import cvtColor, COLOR_BGR2RGBA
+from ffmpegcv import VideoCaptureStream as VCS
+from PIL import ImageTk, Image
+from tkinter import filedialog as fd
+from tkinter import simpledialog as sd
+from tkinter import messagebox as mb
 import numpy as np
-import os
-import six.moves.urllib as urllib
-import sys
-import tarfile
+from datetime import datetime
+import xlwt
+import xlrd
 import tensorflow as tf
-import zipfile
-import pathlib
-from collections import defaultdict
-from io import StringIO
-from matplotlib import pyplot as plt
-from PIL import Image
-from object_detection.utils import ops as utils_ops
-from object_detection.utils import label_map_util
-from object_detection.utils import visualization_utils as vis_util
-import cv2
-while "models" in pathlib.Path.cwd().parts:
-    os.chdir('..')
+
+window = tk.Tk()
+window.title("Detection")
+
+# when detection_flag = False - app shows camera stream in real time
+# when the flag = True - app shows image with detection boxes
+detection_flag = False
+data = None
+Config_path = "config.txt"
+config = open(Config_path).read()
+config = config.splitlines()
+
+numbers_save_path = config[2]
+filename = "test1.txt"
+
+# label for displaying number of detections
+label = tk.Label(
+    window, text="", font=("Calibri 15 bold")
+)
+label.pack()
+
+# set window size
+window.geometry("1024x720")
+
+# Camera has two channels Channel_1 - full high resolution, it is used for detection
+# Channel_2 - preview low resolution, used in normal "stream" mode
+cap2 = VCS(config[3])
+f_top = tk.Frame(window)
+f_bot = tk.Frame(window)
+f_top.pack()
+f_bot.pack()
+
+def writeXLS(detections, file_path):
+    book = xlrd.open_workbook(file_path)
+    sh = book.sheet_by_index(0)
+
+    for y in range(sh.ncols):
+        col = (sh.col(y))
+        for x in range(len(col)):
+            sheet1.write(0, 1, 1)
+            print(record.value)
+
+def on_click_btn1():
+    global data
+    global detection_flag
+    global cap2
+    _, frame = cap2.read()
+    detection_flag = not detection_flag
+    if detection_flag:
+        data, num_handles = detect_and_count(frame)
+        numbers = str(num_handles)
+        label["text"] = numbers
+        data = Image.fromarray(data)
+        _path = numbers_save_path + filename
+        # file = open(_path, "r")
+        # text = file.readlines()
+        # text2 = ""
+        # list = ["0","1","2","3","4","5","6","7","8","9"]
+        # for line in text:
+        #     text2 += line + "\n"
+        #     if line[0]=="{" and len(line) > 2:
+        #         print(line)
+        #         line = line.split(", ")
+        #         for record in line:
+        #             dotflag = False
+        #             index = ""
+        #             count = ""
+        #             for i in range(len(record)):
+        #                 char = record[i]
+        #                 if char == ":":
+        #                     dotflag = True
+        #                 if char in list:
+        #                     if dotflag:
+        #                         count += char
+        #                     else:
+        #                         index += char
+        #             index2 = int(index)
+        #             count2 = int(count)
+        #             if (num_handles.get(int(index2)) == None):
+        #                 num_handles.setdefault(index2, count2)
+        #             else:
+        #                 num_handles[index2] += count2
+        # text2 += (str(datetime.now()) + """\n""")
+        # text2 += (numbers + """\n""")
+        # text2 += ("""За все время: """ + str(num_handles) + """\n""")
+        # file = open(_path, "w")
+        # file.write(text2)
+
+
+def on_click_btn2():
+    newWindow = tk.Toplevel(window)
+    newWindow.title("Настройки")
+    newWindow.geometry("500x500")
+    f_1 = tk.Frame(newWindow)
+    f_2 = tk.Frame(newWindow)
+    f_3 = tk.Frame(newWindow)
+    f_4 = tk.Frame(newWindow)
+    f_1.pack()
+    f_2.pack()
+    f_3.pack()
+    f_4.pack()
+
+    def on_click_conf1():
+        config[0] = fd.askdirectory()
+        label1["text"] = config[0]
+
+    def on_click_conf2():
+        config[1] = fd.askopenfilename(filetypes=[('text Files', '*.pbtxt')])
+        label2["text"] = config[1]
+    def on_click_conf3():
+        config[2] = fd.askdirectory()
+        label3["text"] = config[2]
+    def on_click_conf4():
+        config[3] = sd.askstring(prompt = "new ip", title="camera IP")
+        label4["text"] = config[3]
+    def on_click_conf5():
+        answer = mb.askokcancel(title='Confirmation',
+        message='Save new config?',)
+
+        if answer:
+            txt = config[0] + "\n" + config[1] + "\n" + config[2] + "\n" + config[3]
+            file = open("config.txt", "w")
+            file.write(txt)
+
+    label1 = tk.Label(f_1, text="path to model:  " + config[0], font=("Calibri 10"))
+    label1.pack()
+    btnConf1 = tk.Button(f_1, text="browse", command=on_click_conf1)
+    btnConf1.pack()
+    label2 = tk.Label(f_2, text="path to label map:  " + config[1], font=("Calibri 10"))
+    label2.pack()
+    btnConf2 = tk.Button(f_2, text="browse", command=on_click_conf2)
+    btnConf2.pack()
+    label3 = tk.Label(f_3, text="path to output:  " + config[2], font=("Calibri 10"))
+    label3.pack()
+    btnConf3 = tk.Button(f_3, text="browse", command=on_click_conf3)
+    btnConf3.pack()
+    label4 = tk.Label(f_4, text="camera ip:  " + config[3], font=("Calibri 10"))
+    label4.pack()
+    btnConf4 = tk.Button(f_4, text="Change", command=on_click_conf4)
+    btnConf4.pack()
+    btnConf5 = tk.Button(f_4, text="Save changes", command=on_click_conf5)
+    btnConf5.pack()
 
 
 
-PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\200objects\\saved_model"
-PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map.pbtxt"
+btn1 = tk.Button(f_top, text="Подсчет", command=on_click_btn1)
+btn1.pack(side=tk.LEFT)
 
-category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
+btn2 = tk.Button(f_top, text="Настройки", command=on_click_btn2)
+btn2.pack(side=tk.RIGHT)
 
-model_name = 'ssd_inception_v2_coco_2017_11_17'
+stream_window = tk.Label(f_bot)
+stream_window.pack(side=tk.BOTTOM)
 
+# define canvas dimensions
+canvheight = 540
+canvwidth = 960
 
-def run_inference_for_single_image(model, image):
-    image = np.asarray(image)
-    # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
-    input_tensor = tf.convert_to_tensor(image)
-    # The model expects a batch of images, so add an axis with `tf.newaxis`.
-    input_tensor = input_tensor[tf.newaxis, ...]
+    # define video stream function
 
-    # Run inference
-    model_fn = model.signatures['serving_default']
-    output_dict = model_fn(input_tensor)
+def video_stream():
+    global cap2
+    if not cap2.isOpened():
+        im = Image.open(config[3])
+        img = np.asarray(im)
+        img = detect_and_count(img)
+        img = Image.fromarray(img)
+    else:
+        global detection_flag
+        if detection_flag:
+            img = data
+        else:
+            _, frame = cap2.read()
+            cv2image = cvtColor(frame, COLOR_BGR2RGBA)
+            img = Image.fromarray(cv2image)
+    img = img.resize((canvwidth, canvheight))
+    imgtk = ImageTk.PhotoImage(image=img)
+    stream_window.imgtk = imgtk
+    stream_window.configure(image=imgtk)
+    stream_window.after(300, video_stream)
 
-    # All outputs are batches tensors.
-    # Convert to numpy arrays, and take index [0] to remove the batch dimension.
-    # We're only interested in the first num_detections.
-    num_detections = int(output_dict.pop('num_detections'))
-    output_dict = {key: value[0, :num_detections].numpy()
-                   for key, value in output_dict.items()}
-    output_dict['num_detections'] = num_detections
+# initiate video stream
+video_stream()
 
-    # detection_classes should be ints.
-    output_dict['detection_classes'] = output_dict['detection_classes'].astype(np.int64)
+# run the tkinter main loop
+window.mainloop()
 
-    # Handle models with masks:
-    if 'detection_masks' in output_dict:
-        # Reframe the the bbox mask to the image size.
-        detection_masks_reframed = utils_ops.reframe_box_masks_to_image_masks(
-            output_dict['detection_masks'], output_dict['detection_boxes'],
-            image.shape[0], image.shape[1])
-        detection_masks_reframed = tf.cast(detection_masks_reframed > 0.5,
-                                           tf.uint8)
-        output_dict['detection_masks_reframed'] = detection_masks_reframed.numpy()
-
-    return output_dict
-
-def show_inference(model, frame):
-    # take the frame from webcam feed and convert that to array
-    image_np = np.array(frame)
-    image_np=np.compress([True, True, True, False], image_np, axis=2)
-    # Actual detection.
-    #input_tensor = tf.convert_to_tensor(image_np)
-   #input_tensor = input_tensor[tf.newaxis, ...]
-    output_dict = run_inference_for_single_image(model, image_np)
-    # Visualization of the results of a detection.
-    vis_util.visualize_boxes_and_labels_on_image_array(
-        image_np,
-        output_dict['detection_boxes'],
-        output_dict['detection_classes'],
-        output_dict['detection_scores'],
-        category_index,
-        max_boxes_to_draw=400,
-        min_score_thresh=.2,
-        instance_masks=output_dict.get('detection_masks_reframed', None),
-        use_normalized_coordinates=True,
-        line_thickness=5)
-    # detections = model(input_tensor)
-
-    # # конвертирование тензоров в массив numpy и удаление пакета
-    # num_detections = int(detections.pop('num_detections'))
-    # detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
-    # detections['num_detections'] = num_detections
-    #
-    # # визуализация результатов предсказания на изображении
-    # image_np_with_detections = image_np.copy()
-    # vis_util.visualize_boxes_and_labels_on_image_array(
-    #     image_np_with_detections,
-    #     detections['detection_boxes'],
-    #     detections['detection_classes'],
-    #     detections['detection_scores'],
-    #     category_index,
-    #     use_normalized_coordinates=True,
-    #     max_boxes_to_draw=400,
-    #     min_score_thresh=.2,
-    #     agnostic_mode=False)
-    return (image_np, output_dict)
-
-def Affine(img):
-    rows, cols, ch = img.shape
-    pts1 = np.float32([[9, 87], [1960, 111], [216, 1104], [1752, 1049]])
-    pts2 = np.float32([[0, 0], [1890, 0], [0, 1300], [1890, 1100]])
-    M = cv2.getPerspectiveTransform(pts1, pts2)
-    dst = cv2.warpPerspective(img, M, (1890, 1100))
-    return (dst)
