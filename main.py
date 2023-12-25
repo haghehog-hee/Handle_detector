@@ -8,9 +8,11 @@ from tkinter import simpledialog as sd
 from tkinter import messagebox as mb
 import numpy as np
 from datetime import datetime
-import xlwt
 import xlrd
-import tensorflow as tf
+from xlutils.copy import copy
+import os
+
+
 
 window = tk.Tk()
 window.title("Detection")
@@ -22,9 +24,11 @@ data = None
 Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
-
+use_cpu = config[4]
+if use_cpu == "CPU":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 numbers_save_path = config[2]
-filename = "test1.txt"
+filename = "trial.xls"
 
 # label for displaying number of detections
 label = tk.Label(
@@ -43,15 +47,22 @@ f_bot = tk.Frame(window)
 f_top.pack()
 f_bot.pack()
 
-def writeXLS(detections, file_path):
-    book = xlrd.open_workbook(file_path)
-    sh = book.sheet_by_index(0)
-
-    for y in range(sh.ncols):
-        col = (sh.col(y))
-        for x in range(len(col)):
-            sheet1.write(0, 1, 1)
-            print(record.value)
+def writeXLS(detections, file_path, num_classes):
+    bk = xlrd.open_workbook(file_path)
+    book = copy(bk)
+    sh1 = bk.sheet_by_index(0)
+    sh = book.get_sheet(0)
+    print(datetime.now())
+    sh.write(0, sh1.ncols, str(datetime.now()))
+    for x in range(1, num_classes+1):
+        if x in detections:
+            sh.write(x, sh1.ncols, detections[x])
+    book.save(file_path)
+    # for y in range(sh.ncols):
+    #     col = (sh.col(y))
+    #     for x in range(len(col)):
+    #
+    #         print(record.value)
 
 def on_click_btn1():
     global data
@@ -60,11 +71,12 @@ def on_click_btn1():
     _, frame = cap2.read()
     detection_flag = not detection_flag
     if detection_flag:
-        data, num_handles = detect_and_count(frame)
+        data, num_handles, num_classes = detect_and_count(frame)
         numbers = str(num_handles)
         label["text"] = numbers
         data = Image.fromarray(data)
         _path = numbers_save_path + filename
+        writeXLS(num_handles, _path, num_classes)
         # file = open(_path, "r")
         # text = file.readlines()
         # text2 = ""

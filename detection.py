@@ -8,19 +8,27 @@ from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 import cv2
 
-while "models" in pathlib.Path.cwd().parts:
-    os.chdir('..')
+# while "models" in pathlib.Path.cwd().parts:
+#     os.chdir('..')
 
-thresh = 0.1
+
+
 Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
+use_cpu = config[4]
+thresh = float(config[5])
+if use_cpu == "CPU":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 PATH_TO_MODEL_DIR = config[0]
 PATH_TO_LABELS = config[1]
 category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
 PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
+
 # загрузка модели
+print("lol")
+
 detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
 
 def affine_transform(img):
@@ -99,25 +107,25 @@ def remove_overlap(output_dict):
 
 def detect_and_count(img):
     global thresh
-    with tf.device('/GPU:0'):
-        # model efficientdetd0 can only process images of size 512x512,
-        # so I split large input image into 3 parts and process them separately
-        # due to specific of task it doesn't create error in detections
-        cropped1, cropped2, cropped3 = affine_transform(img)
-        image1, detections1 = show_inference(detection_model, cropped1)
-        image2, detections2 = show_inference(detection_model, cropped2)
-        image3, detections3 = show_inference(detection_model, cropped3)
-        dicts = [detections1, detections2, detections3]
-        image = cv2.hconcat([image1, image2, image3])
-        detection_numbers = dict()
-        for detections in dicts:
-            for i in range(0, detections['detection_classes'].size):
-                if detections['detection_scores'][i] >= thresh:
-                    if detection_numbers.get(detections['detection_classes'][i]) is None:
-                        detection_numbers.setdefault(detections['detection_classes'][i], 1)
-                    else:
-                        detection_numbers[detections['detection_classes'][i]] += 1
-        return image, detection_numbers
+
+    # model efficientdetd0 can only process images of size 512x512,
+    # so I split large input image into 3 parts and process them separately
+    # due to specific of task it doesn't create error in detections
+    cropped1, cropped2, cropped3 = affine_transform(img)
+    image1, detections1 = show_inference(detection_model, cropped1)
+    image2, detections2 = show_inference(detection_model, cropped2)
+    image3, detections3 = show_inference(detection_model, cropped3)
+    dicts = [detections1, detections2, detections3]
+    image = cv2.hconcat([image1, image2, image3])
+    detection_numbers = dict()
+    for detections in dicts:
+        for i in range(0, detections['detection_classes'].size):
+            if detections['detection_scores'][i] >= thresh:
+                if detection_numbers.get(detections['detection_classes'][i]) is None:
+                    detection_numbers.setdefault(detections['detection_classes'][i], 1)
+                else:
+                    detection_numbers[detections['detection_classes'][i]] += 1
+    return image, detection_numbers, detections['detection_classes'].size
 
 def run_inference_for_single_image(model, image):
     image = np.asarray(image)
@@ -168,7 +176,7 @@ def show_inference(model, frame):
         output_dict['detection_scores'],
         category_index,
         max_boxes_to_draw=400,
-        min_score_thresh=.2,
+        min_score_thresh=thresh,
         instance_masks=output_dict.get('detection_masks_reframed', None),
         use_normalized_coordinates=True,
         line_thickness=5)
