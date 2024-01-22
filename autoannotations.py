@@ -8,22 +8,26 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import warnings
-from detection import remove_overlap
+from detection import remove_overlap, detect_and_count2
 import cv2 as cv
+from Affine_transform import Atransform
+
 # пути к модели и меткам
 PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-IMAGE_SAVE_PATH = "C:\\Tensorflow\\dataset\\autoresult\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\unlabeled\\"
-ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\autolabels\\"
+IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\result\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\raw\\"
+ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\annotations\\"
+AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
 canny_ann_path = "C:\\Tensorflow\\Dataset\\testset\\"
 canny_img_save = "C:\\Tensorflow\\Dataset\\autoimages\\"
 canny_ann_save = "C:\\Tensorflow\\Dataset\\test\\"
 flag = True
-
-
-thresh = 0.3
+test_flag = False
+agnostic_flag = False
+affine_flag = True
+thresh = 0.15
 
 IMAGE_PATHS = os.listdir(IMAGE_PATH)
 
@@ -102,26 +106,93 @@ def detection_to_text (detections, filename, image_path, width, height):
 	</size>
 	<segmented>0</segmented>'''
     for i in range(detections['detection_scores'].size):
-        box = detections['detection_boxes'][i]
-        type = detections['detection_classes'][i]
-        text = \
-            '''<object> 
-                   <name>handle''' + str(type).replace(".0","") + '''</name>
-                   <pose>Unspecified</pose> 
-                   <truncated>0</truncated> 
-                   <difficult>0</difficult> 
-                   <bndbox> 
-                       <xmin>''' + str(box[1]*width) + '''</xmin> 
-                       <ymin>''' + str(box[0]*height) + '''</ymin> 
-                       <xmax>''' + str(box[3]*width) + '''</xmax> 
-                       <ymax>''' + str(box[2]*height) + '''</ymax> 
-                   </bndbox> 
-               </object>'''
-        _text += text
+        if detections['detection_scores'][i] > thresh:
+            box = detections['detection_boxes'][i]
+            type = detections['detection_classes'][i]
+            text = \
+                '''<object> 
+                       <name>handle''' + str(type).replace(".0","") + '''</name>
+                       <pose>Unspecified</pose> 
+                       <truncated>0</truncated> 
+                       <difficult>0</difficult> 
+                       <bndbox> 
+                           <xmin>''' + str(box[1]*width) + '''</xmin> 
+                           <ymin>''' + str(box[0]*height) + '''</ymin> 
+                           <xmax>''' + str(box[3]*width) + '''</xmax> 
+                           <ymax>''' + str(box[2]*height) + '''</ymax> 
+                       </bndbox> 
+                   </object>'''
+            _text += text
     _text += '''</annotation>'''
     file.write(_text)
     file.close()
 # цикл по всем изображениям
+
+def autoannotate(im, PATH):
+    global IMAGE_SAVE_PATH
+    height, width, ch = im.shape
+
+    image_np = im
+    #im = im.convert('RGB')
+    #image_np = np.asarray(im)
+    # преобразование в тензор
+    input_tensor = tf.convert_to_tensor(image_np)
+
+    # добавление размерности пакета к изображению
+    input_tensor = input_tensor[tf.newaxis, ...]
+
+    # выполнение предсказания
+    detections = detect_fn(input_tensor)
+    # конвертирование тензоров в массив numpy и удаление пакета
+    num_detections = int(detections.pop('num_detections'))
+    # print(num_detections)
+
+    detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
+    detections = remove_overlap(detections)
+    detections['num_detections'] = num_detections
+    # detection_to_text(detections, PATH2, image_path2, width, height)
+    if affine_flag:
+        path = AFFINE_SAVE_PATH + PATH
+        detection_to_text(detections, PATH, path, width, height)
+    else:
+        detection_to_text(detections, PATH, image_path, width, height)
+
+    # визуализация результатов предсказания на изображении
+    image_np_with_detections = image_np.copy()
+    viz_utils.visualize_boxes_and_labels_on_image_array(
+        image_np_with_detections,
+        detections['detection_boxes'],
+        detections['detection_classes'],
+        detections['detection_scores'],
+        category_index,
+        use_normalized_coordinates=True,
+        max_boxes_to_draw=None,
+        min_score_thresh=thresh,
+        agnostic_mode=agnostic_flag)
+
+    # вывод списка классов, обнаруженных на изображении
+    # print(detections['num_detections'])
+    d = dict()
+    for i in range(0, detections['detection_classes'].size):
+        if (detections['detection_scores'][i] >= thresh):
+            if (d.get(detections['detection_classes'][i]) == None):
+                d.setdefault(detections['detection_classes'][i], 1)
+            else:
+                d[detections['detection_classes'][i]] += 1
+    # print(d)
+    # отображение и сохранение изображения с визуализированными результатами
+    plt.figure()
+    plt.imshow(image_np_with_detections)
+    plt.show()
+
+    img = Image.fromarray(image_np_with_detections)
+    img.save(IMAGE_SAVE_PATH + "1" + PATH)
+    # im2.save(image_path2 + PATH2)
+    print('Done')
+
+
+
+
 
 if flag:
     for PATH in IMAGE_PATHS:
@@ -129,68 +200,77 @@ if flag:
         print('Running inference for {}... '.format(image_path), end='')
         # загрузка изображения
         #image_np = load_image_into_numpy_array(image_path)
-        im = Image.open(image_path)
-        # if im[0][0][0] == im[0][0][1] and im[0][0][0] == im[0][0][2]:
-        #     alpha = 1
-        #     beta = 1.2
-        #     im2 = cv.convertScaleAbs(im, alpha, beta)
-        #     im2 = cv.Canny(im2, 30, 40)
-        # else:
-        #     im2 = cv.Canny(im, 80, 110)
-        # PATH2 = "canny" + PATH
-        # image_path2 = IMAGE_PATH + PATH2
-        width, height = im.size
-        im = im.convert('RGB')
-        image_np = np.asarray(im)
-        # преобразование в тензор
-        input_tensor = tf.convert_to_tensor(image_np)
 
-        # добавление размерности пакета к изображению
-        input_tensor = input_tensor[tf.newaxis, ...]
+        if affine_flag:
+            im = cv.imread(image_path)
+            #im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
+            im1, im2, im3 = Atransform(im)
+            PATH1 = "cropped1"+PATH
+            PATH2 = "cropped2"+PATH
+            PATH3 = "cropped3"+PATH
+            autoannotate(im1, PATH1)
+            autoannotate(im2, PATH2)
+            autoannotate(im3, PATH3)
+            cv.imwrite(AFFINE_SAVE_PATH + PATH1, im1)
+            cv.imwrite(AFFINE_SAVE_PATH + PATH2, im2)
+            cv.imwrite(AFFINE_SAVE_PATH + PATH3, im3)
+        else:
+            im = Image.open(image_path)
+            im = im.convert('RGB')
+            autoannotate(im, PATH)
 
-        # выполнение предсказания
-        detections = detect_fn(input_tensor)
-        # конвертирование тензоров в массив numpy и удаление пакета
-        num_detections = int(detections.pop('num_detections'))
-        #print(num_detections)
-
-        detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
-        detections = remove_overlap(detections)
-        detections['num_detections'] = num_detections
-        #detection_to_text(detections, PATH2, image_path2, width, height)
-        detection_to_text(detections, PATH, image_path, width, height)
-
-        # визуализация результатов предсказания на изображении
-        image_np_with_detections = image_np.copy()
-        viz_utils.visualize_boxes_and_labels_on_image_array(
-            image_np_with_detections,
-            detections['detection_boxes'],
-            detections['detection_classes'],
-            detections['detection_scores'],
-            category_index,
-            use_normalized_coordinates=True,
-            max_boxes_to_draw=None,
-            min_score_thresh=thresh,
-            agnostic_mode=False)
-
-        # вывод списка классов, обнаруженных на изображении
-        #print(detections['num_detections'])
-        d = dict()
-        for i in range (0,detections['detection_classes'].size):
-            if(detections['detection_scores'][i]>=thresh):
-                if(d.get(detections['detection_classes'][i])==None):
-                    d.setdefault(detections['detection_classes'][i],1)
-                else:
-                    d[detections['detection_classes'][i]]+=1
-        #print(d)
-        # отображение и сохранение изображения с визуализированными результатами
-        plt.figure()
-        plt.imshow(image_np_with_detections)
-        plt.show()
-
-        img = Image.fromarray(image_np_with_detections)
-        img.save(IMAGE_SAVE_PATH + "1" + PATH)
-        #im2.save(image_path2 + PATH2)
-        print('Done')
 if not flag:
     to_canny(canny_img_path,canny_ann_path, canny_img_save, canny_ann_save)
+
+# if flag:
+#     for PATH in IMAGE_PATHS:
+#         image_path = IMAGE_PATH + PATH
+#         print('Running inference for {}... '.format(image_path), end='')
+#         # загрузка изображения
+#         #image_np = load_image_into_numpy_array(image_path)
+#         im = Image.open(image_path)
+#         # if im[0][0][0] == im[0][0][1] and im[0][0][0] == im[0][0][2]:
+#         #     alpha = 1
+#         #     beta = 1.2
+#         #     im2 = cv.convertScaleAbs(im, alpha, beta)
+#         #     im2 = cv.Canny(im2, 30, 40)
+#         # else:
+#         #     im2 = cv.Canny(im, 80, 110)
+#         # PATH2 = "canny" + PATH
+#         # image_path2 = IMAGE_PATH + PATH2
+#         width, height = im.size
+#         im = im.convert('RGB')
+#         image_np = np.asarray(im)
+#         # преобразование в тензор
+#         #input_tensor = tf.convert_to_tensor(image_np)
+#
+#         # добавление размерности пакета к изображению
+#         #input_tensor = input_tensor[tf.newaxis, ...]
+#
+#         image, detections = detect_and_count2(image_np)
+#         #detection_to_text(detections, PATH2, image_path2, width, height)
+#         detection_to_text(detections, PATH, image_path, width, height)
+#
+#         # визуализация результатов предсказания на изображении
+#
+#
+#
+#         # вывод списка классов, обнаруженных на изображении
+#         #print(detections['num_detections'])
+#         d = dict()
+#         for i in range (0,detections['detection_classes'].size):
+#             if(detections['detection_scores'][i]>=thresh):
+#                 if(d.get(detections['detection_classes'][i])==None):
+#                     d.setdefault(detections['detection_classes'][i],1)
+#                 else:
+#                     d[detections['detection_classes'][i]]+=1
+#         #print(d)
+#         # отображение и сохранение изображения с визуализированными результатами
+#         plt.figure()
+#         plt.imshow(image)
+#         plt.show()
+#
+#         img = Image.fromarray(image)
+#         img.save(IMAGE_SAVE_PATH + "1" + PATH)
+#         #im2.save(image_path2 + PATH2)
+#         print('Done')

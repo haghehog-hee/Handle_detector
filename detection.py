@@ -27,9 +27,44 @@ category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABE
 PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
 
 # загрузка модели
-print("lol")
+#print("lol")
 
 detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
+
+def horizontal_split(img, output_dict):
+    rows, cols, ch = img.shape
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+    splitlineTop = rows/2
+    splitlineBot = rows/2
+    flag = True
+
+    checkTop = True
+    checkBot = True
+    while flag:
+        for box in output_dict['detection_boxes']:
+            #box[y1,x1,y2,x2]
+            y1 = box[0]
+            y2 = box[2]
+            if splitlineTop > y1 and splitlineTop < y2:
+                splitlineTop -=1
+                checkTop = False
+            if splitlineBot > y1 and splitlineBot < y2:
+                splitlineBot +=1
+                checkBot = False
+            if checkTop:
+                cropped_image1 = img[0:splitlineTop, 0:cols]
+                cropped_image2 = img[splitlineTop:rows, 0:cols]
+                flag = False
+            elif checkBot:
+                cropped_image1 = img[0:splitlineBot, 0:cols]
+                cropped_image2 = img[splitlineBot:rows, 0:cols]
+                flag = False
+            if splitlineTop < rows/4:
+                return False, False
+    return cropped_image1, cropped_image2
+
+
+
 
 def affine_transform(img):
     rows, cols, ch = img.shape
@@ -47,6 +82,25 @@ def affine_transform(img):
     cropped_image3 = dst[0:rows, second_third:cols]
     return cropped_image1, cropped_image2, cropped_image3
 
+def affine_transform2(img):
+    rows, cols, ch = img.shape
+    # camera is located not perpendicular to frame, so this code transforms image to somewhat straight
+    # this improves detection quality
+    pts1 = numpy.float32([[0, rows * 0.05], [cols * 1.05, rows * 0.05], [cols * 0.1, rows * 0.98], [cols * 0.95, rows]])
+    pts2 = numpy.float32([[0, 0], [cols, 0], [0, rows], [cols, rows]])
+    M = cv2.getPerspectiveTransform(pts1, pts2)
+    dst = cv2.warpPerspective(img, M, (cols, rows))
+    first_third = int(cols / 3)
+    second_third = cols - first_third
+    half = int(rows/2)
+    cropped_image1 = dst[0:half, 0:first_third]
+    cropped_image2 = dst[0:half, first_third:second_third]
+    cropped_image3 = dst[0:half, second_third:cols]
+    cropped_image4 = dst[half:rows, 0:first_third]
+    cropped_image5 = dst[half:rows, first_third:second_third]
+    cropped_image6 = dst[half:rows, second_third:cols]
+    return cropped_image1, cropped_image2, cropped_image3, cropped_image4, cropped_image5, cropped_image6
+
 def distance(x1, y1, x2, y2):
     return np.sqrt(((x1-x2)**2 + (y1-y2)**2))
 
@@ -59,14 +113,14 @@ def remove_overlap(output_dict):
     output_dict1 = output_dict.copy()
     i = 0
     kek = 0
-    for scores in output_dict['detection_multiclass_scores']:
-        for l, score in enumerate(scores):
-            if score < max(scores):
-                scores[l] = 0
-    for scores in output_dict['raw_detection_scores']:
-        for l, score in enumerate(scores):
-            if score < max(scores):
-                scores[l] = 0
+    # for scores in output_dict['detection_multiclass_scores']:
+    #     for l, score in enumerate(scores):
+    #         if score < max(scores):
+    #             scores[l] = 0
+    # for scores in output_dict['raw_detection_scores']:
+    #     for l, score in enumerate(scores):
+    #         if score < max(scores):
+    #             scores[l] = 0
     while i < output_dict['detection_classes'].size-1:
         #print(i)
         #new_scores = np.array()
@@ -126,6 +180,34 @@ def detect_and_count(img):
                 else:
                     detection_numbers[detections['detection_classes'][i]] += 1
     return image, detection_numbers, detections['detection_classes'].size
+
+def detect_and_count2(img):
+    global thresh
+
+    # model efficientdetd0 can only process images of size 512x512,
+    # so I split large input image into 3 parts and process them separately
+    # due to specific of task it doesn't create error in detections
+    cropped1, cropped2, cropped3, cropped4, cropped5, cropped6 = affine_transform2(img)
+    image1, detections1 = show_inference(detection_model, cropped1)
+    image2, detections2 = show_inference(detection_model, cropped2)
+    image3, detections3 = show_inference(detection_model, cropped3)
+    image4, detections4 = show_inference(detection_model, cropped4)
+    image5, detections5 = show_inference(detection_model, cropped5)
+    image6, detections6 = show_inference(detection_model, cropped6)
+    dicts = [detections1, detections2, detections3, detections4, detections5, detections6]
+    image = cv2.hconcat([image1, image2, image3])
+    imagehalf = cv2.hconcat([image4, image5, image6])
+    image = cv2.vconcat([image, imagehalf])
+    detection_numbers = dict()
+    for detections in dicts:
+        for i in range(0, detections['detection_classes'].size):
+            if detections['detection_scores'][i] >= thresh:
+                if detection_numbers.get(detections['detection_classes'][i]) is None:
+                    detection_numbers.setdefault(detections['detection_classes'][i], 1)
+                else:
+                    detection_numbers[detections['detection_classes'][i]] += 1
+    return image, detections
+
 
 def run_inference_for_single_image(model, image):
     image = np.asarray(image)

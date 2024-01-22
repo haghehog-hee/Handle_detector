@@ -11,12 +11,12 @@ from datetime import datetime
 import xlrd
 from xlutils.copy import copy
 import os
-
+import socket
 
 
 window = tk.Tk()
 window.title("Detection")
-
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # when detection_flag = False - app shows camera stream in real time
 # when the flag = True - app shows image with detection boxes
 detection_flag = False
@@ -25,23 +25,26 @@ Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
 use_cpu = config[4]
+controller_ip = config[6]
+automation = False
 if use_cpu == "CPU":
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 numbers_save_path = config[2]
 filename = "trial.xls"
-
+print("01")
 # label for displaying number of detections
 label = tk.Label(
     window, text="", font=("Calibri 15 bold")
 )
 label.pack()
-
+print("02")
 # set window size
 window.geometry("1024x720")
 
 # Camera has two channels Channel_1 - full high resolution, it is used for detection
 # Channel_2 - preview low resolution, used in normal "stream" mode
 cap2 = VCS(config[3])
+print("03")
 f_top = tk.Frame(window)
 f_bot = tk.Frame(window)
 f_top.pack()
@@ -63,6 +66,25 @@ def writeXLS(detections, file_path, num_classes):
     #     for x in range(len(col)):
     #
     #         print(record.value)
+
+def readEthernet():
+    print("-1")
+    global controller_ip
+    connected = False
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.settimeout(1)
+    try:
+        client.connect((controller_ip, 1285))
+        connected = True
+    except socket.timeout:
+        print("lol")
+    if connected:
+        message = 0x00FF0A0027020000204D0200.to_bytes(12, 'big')
+        client.send(message)
+        from_server = client.recv(5050)
+    return True
+
+
 
 def on_click_btn1():
     global data
@@ -110,6 +132,14 @@ def on_click_btn1():
         # text2 += ("""За все время: """ + str(num_handles) + """\n""")
         # file = open(_path, "w")
         # file.write(text2)
+def on_click_btn_auto():
+    global automation
+    if automation:
+        btn3.config(text="Авторежим выключен")
+        automation = False
+    else:
+        btn3.config(text="Автоматическое распознавание")
+        automation = True
 
 
 def on_click_btn2():
@@ -124,6 +154,7 @@ def on_click_btn2():
     f_2.pack()
     f_3.pack()
     f_4.pack()
+
 
     def on_click_conf1():
         config[0] = fd.askdirectory()
@@ -141,7 +172,6 @@ def on_click_btn2():
     def on_click_conf5():
         answer = mb.askokcancel(title='Confirmation',
         message='Save new config?',)
-
         if answer:
             txt = config[0] + "\n" + config[1] + "\n" + config[2] + "\n" + config[3]
             file = open("config.txt", "w")
@@ -174,6 +204,9 @@ btn1.pack(side=tk.LEFT)
 btn2 = tk.Button(f_top, text="Настройки", command=on_click_btn2)
 btn2.pack(side=tk.RIGHT)
 
+btn3 = tk.Button(f_top, text="Авторежим выключен", command=on_click_btn_auto)
+btn3.pack(side=tk.RIGHT)
+
 stream_window = tk.Label(f_bot)
 stream_window.pack(side=tk.BOTTOM)
 
@@ -185,19 +218,25 @@ canvwidth = 960
 
 def video_stream():
     global cap2
+    global detection_flag
+    print("1")
+    if automation and readEthernet():
+        on_click_btn1()
+        detection_flag = False
+    print("2")
     if not cap2.isOpened():
         im = Image.open(config[3])
         img = np.asarray(im)
         img = detect_and_count(img)
         img = Image.fromarray(img)
     else:
-        global detection_flag
         if detection_flag:
             img = data
         else:
             _, frame = cap2.read()
             cv2image = cvtColor(frame, COLOR_BGR2RGBA)
             img = Image.fromarray(cv2image)
+    print("3")
     img = img.resize((canvwidth, canvheight))
     imgtk = ImageTk.PhotoImage(image=img)
     stream_window.imgtk = imgtk
@@ -205,6 +244,7 @@ def video_stream():
     stream_window.after(300, video_stream)
 
 # initiate video stream
+print("0")
 video_stream()
 
 # run the tkinter main loop
