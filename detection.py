@@ -7,11 +7,13 @@ from object_detection.utils import ops as utils_ops
 from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 import cv2
+import matplotlib.pyplot as plt
+from PIL import Image
 
 # while "models" in pathlib.Path.cwd().parts:
 #     os.chdir('..')
 
-
+test_save_path = ""
 
 Config_path = "config.txt"
 config = open(Config_path).read()
@@ -34,33 +36,35 @@ detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
 def horizontal_split(img, output_dict):
     rows, cols, ch = img.shape
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
-    splitlineTop = rows/2
-    splitlineBot = rows/2
+    splitline = int(rows/2)
     flag = True
-
-    checkTop = True
-    checkBot = True
     while flag:
+        flag = False
         for box in output_dict['detection_boxes']:
             #box[y1,x1,y2,x2]
-            y1 = box[0]
-            y2 = box[2]
-            if splitlineTop > y1 and splitlineTop < y2:
-                splitlineTop -=1
-                checkTop = False
-            if splitlineBot > y1 and splitlineBot < y2:
-                splitlineBot +=1
-                checkBot = False
-            if checkTop:
-                cropped_image1 = img[0:splitlineTop, 0:cols]
-                cropped_image2 = img[splitlineTop:rows, 0:cols]
-                flag = False
-            elif checkBot:
-                cropped_image1 = img[0:splitlineBot, 0:cols]
-                cropped_image2 = img[splitlineBot:rows, 0:cols]
-                flag = False
-            if splitlineTop < rows/4:
-                return False, False
+            y1 = int(box[0]*rows)
+            y2 = int(box[2]*rows)
+            #print(str(y1) + " _ "+ str(y2) +" _ "+ str(splitline))
+            if splitline > y1 and splitline < y2:
+                #box_square = square(box[1],box[0],box[3],box[2])
+                #cut_square = square(box[1], box[0], box[3], splitline/rows)
+                #if box_square/cut_square < 20:
+                splitline -= 4
+                flag = True
+                # cropped_image1 = img[0:splitline, 0:cols]
+                # im = Image.fromarray(cropped_image1)
+                # im = im.convert('RGB')
+                # im.save(test_save_path +str(img[0][0])+ str(splitline) +".jpg")
+
+    if splitline < rows/3:
+        splitline = rows-1
+    cropped_image1 = img[0:splitline, 0:cols]
+    cropped_image2 = img[splitline:rows, 0:cols]
+
+
+        #     flag = False
+        # if splitlineTop < rows/4:
+        #     return [], []
     return cropped_image1, cropped_image2
 
 
@@ -104,12 +108,29 @@ def affine_transform2(img):
 def distance(x1, y1, x2, y2):
     return np.sqrt(((x1-x2)**2 + (y1-y2)**2))
 
+def square(x1, y1, x2, y2):
+    y = abs(y2-y1)
+    x = abs(x2-x1)
+    return x*y
+
+
 def dumb_detection(img):
     image, detections = show_inference(detection_model, img)
     return image
 
+def delete_detection(output_dict, i):
+    output_dict['detection_classes'] = np.delete(output_dict['detection_classes'], i, 0)
+    output_dict['raw_detection_boxes'] = np.delete(output_dict['raw_detection_boxes'], i, 0)
+    output_dict['raw_detection_scores'] = np.delete(output_dict['raw_detection_scores'], i, 0)
+    output_dict['detection_multiclass_scores'] = np.delete(output_dict['detection_multiclass_scores'], i, 0)
+    output_dict['detection_boxes'] = np.delete(output_dict['detection_boxes'], i, 0)
+    output_dict['detection_scores'] = np.delete(output_dict['detection_scores'], i, 0)
+    output_dict['detection_anchor_indices'] = np.delete(output_dict['detection_anchor_indices'], i, 0)
+    return output_dict
+
 def remove_overlap(output_dict):
     threshold = 0.12
+    global thresh
     output_dict1 = output_dict.copy()
     i = 0
     kek = 0
@@ -121,7 +142,11 @@ def remove_overlap(output_dict):
     #     for l, score in enumerate(scores):
     #         if score < max(scores):
     #             scores[l] = 0
+
     while i < output_dict['detection_classes'].size-1:
+        if output_dict['detection_scores'][i] < thresh:
+            output_dict = delete_detection(output_dict, i)
+            continue
         #print(i)
         #new_scores = np.array()
         #print(output_dict['detection_multiclass_scores'])
@@ -139,26 +164,44 @@ def remove_overlap(output_dict):
                 #print(dist2 + dist1)
                 kek+=1
                 if output_dict['detection_scores'][i] < output_dict['detection_scores'][j]:
-                    output_dict['detection_classes'] = np.delete(output_dict['detection_classes'], i, 0)
-                    output_dict['raw_detection_boxes'] = np.delete(output_dict['raw_detection_boxes'], i, 0)
-                    output_dict['raw_detection_scores'] = np.delete(output_dict['raw_detection_scores'], i, 0)
-                    output_dict['detection_multiclass_scores'] = np.delete(output_dict['detection_multiclass_scores'], i, 0)
-                    output_dict['detection_boxes'] = np.delete(output_dict['detection_boxes'], i, 0)
-                    output_dict['detection_scores'] = np.delete(output_dict['detection_scores'], i, 0)
-                    output_dict['detection_anchor_indices'] = np.delete(output_dict['detection_anchor_indices'], i, 0)
+                    output_dict = delete_detection(output_dict, i)
                 else:
-                    output_dict['detection_classes'] = np.delete(output_dict['detection_classes'], j, 0)
-                    output_dict['raw_detection_boxes'] = np.delete(output_dict['raw_detection_boxes'], j, 0)
-                    output_dict['raw_detection_scores'] = np.delete(output_dict['raw_detection_scores'], j, 0)
-                    output_dict['detection_multiclass_scores'] = np.delete(output_dict['detection_multiclass_scores'], j, 0)
-                    output_dict['detection_boxes'] = np.delete(output_dict['detection_boxes'], j, 0)
-                    output_dict['detection_scores'] = np.delete(output_dict['detection_scores'], j, 0)
-                    output_dict['detection_anchor_indices'] = np.delete(output_dict['detection_anchor_indices'], j, 0)
+                    output_dict = delete_detection(output_dict, j)
             j -= 1
         i += 1
     return output_dict
 
 
+# def detect_and_count(img):
+#     global thresh
+#
+#     # model efficientdetd0 can only process images of size 512x512,
+#     # so I split large input image into 3 parts and process them separately
+#     # due to specific of task it doesn't create error in detections
+#     cropped1, cropped2, cropped3 = affine_transform(img)
+#     image1, detections1 = show_inference(detection_model, cropped1)
+#     image2, detections2 = show_inference(detection_model, cropped2)
+#     image3, detections3 = show_inference(detection_model, cropped3)
+#     dicts = [detections1, detections2, detections3]
+#     image = cv2.hconcat([image1, image2, image3])
+#     detection_numbers = dict()
+#     for detections in dicts:
+#         for i in range(0, detections['detection_classes'].size):
+#             if detections['detection_scores'][i] >= thresh:
+#                 if detection_numbers.get(detections['detection_classes'][i]) is None:
+#                     detection_numbers.setdefault(detections['detection_classes'][i], 1)
+#                 else:
+#                     detection_numbers[detections['detection_classes'][i]] += 1
+#     return image, detection_numbers, detections['detection_classes'].size
+
+def merge_dict(dict1, dict2):
+    numpy.append(dict1['detection_classes'],dict2['detection_classes'])
+    numpy.append(dict1['raw_detection_boxes'],dict2['raw_detection_boxes'])
+    numpy.append(dict1['detection_multiclass_scores'],dict2['detection_multiclass_scores'])
+    numpy.append(dict1['detection_boxes'],dict2['detection_boxes'])
+    numpy.append(dict1['detection_scores'],dict2['detection_scores'])
+    numpy.append(dict1['detection_anchor_indices'],dict2['detection_anchor_indices'])
+    return dict1
 def detect_and_count(img):
     global thresh
 
@@ -169,6 +212,29 @@ def detect_and_count(img):
     image1, detections1 = show_inference(detection_model, cropped1)
     image2, detections2 = show_inference(detection_model, cropped2)
     image3, detections3 = show_inference(detection_model, cropped3)
+    detections1 = remove_overlap(detections1)
+    detections2 = remove_overlap(detections2)
+    detections3 = remove_overlap(detections3)
+    cropped1h1, cropped1h2 = horizontal_split(cropped1, detections1)
+    cropped2h1, cropped2h2 = horizontal_split(cropped2, detections2)
+    cropped3h1, cropped3h2 = horizontal_split(cropped3, detections3)
+
+    if len(cropped1h1) > 1 and len(cropped1h2) > 1 :
+        image1h1, detections1h1 = show_inference(detection_model, cropped1h1)
+        image1h2, detections1h2 = show_inference(detection_model, cropped1h2)
+        image1 = cv2.vconcat([image1h1, image1h2])
+        detections1 = merge_dict(detections1h1,detections1h2)
+    if len(cropped2h1) > 1 and len(cropped2h2) > 1 :
+        image2h1, detections2h1 = show_inference(detection_model, cropped2h1)
+        image2h2, detections2h2 = show_inference(detection_model, cropped2h2)
+        image2 = cv2.vconcat([image2h1, image2h2])
+        detections2 = merge_dict(detections2h1, detections2h2)
+    if len(cropped3h1) > 1 and len(cropped3h2) > 1 :
+        image3h1, detections3h1 = show_inference(detection_model, cropped3h1)
+        image3h2, detections3h2 = show_inference(detection_model, cropped3h2)
+        image3 = cv2.vconcat([image3h1, image3h2])
+        detections3 = merge_dict(detections3h1, detections3h2)
+
     dicts = [detections1, detections2, detections3]
     image = cv2.hconcat([image1, image2, image3])
     detection_numbers = dict()
@@ -180,33 +246,6 @@ def detect_and_count(img):
                 else:
                     detection_numbers[detections['detection_classes'][i]] += 1
     return image, detection_numbers, detections['detection_classes'].size
-
-def detect_and_count2(img):
-    global thresh
-
-    # model efficientdetd0 can only process images of size 512x512,
-    # so I split large input image into 3 parts and process them separately
-    # due to specific of task it doesn't create error in detections
-    cropped1, cropped2, cropped3, cropped4, cropped5, cropped6 = affine_transform2(img)
-    image1, detections1 = show_inference(detection_model, cropped1)
-    image2, detections2 = show_inference(detection_model, cropped2)
-    image3, detections3 = show_inference(detection_model, cropped3)
-    image4, detections4 = show_inference(detection_model, cropped4)
-    image5, detections5 = show_inference(detection_model, cropped5)
-    image6, detections6 = show_inference(detection_model, cropped6)
-    dicts = [detections1, detections2, detections3, detections4, detections5, detections6]
-    image = cv2.hconcat([image1, image2, image3])
-    imagehalf = cv2.hconcat([image4, image5, image6])
-    image = cv2.vconcat([image, imagehalf])
-    detection_numbers = dict()
-    for detections in dicts:
-        for i in range(0, detections['detection_classes'].size):
-            if detections['detection_scores'][i] >= thresh:
-                if detection_numbers.get(detections['detection_classes'][i]) is None:
-                    detection_numbers.setdefault(detections['detection_classes'][i], 1)
-                else:
-                    detection_numbers[detections['detection_classes'][i]] += 1
-    return image, detections
 
 
 def run_inference_for_single_image(model, image):

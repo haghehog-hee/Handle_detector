@@ -225,10 +225,12 @@ def video_stream():
         detection_flag = False
     print("2")
     if not cap2.isOpened():
-        im = Image.open(config[3])
-        img = np.asarray(im)
-        img = detect_and_count(img)
-        img = Image.fromarray(img)
+        if not detection_flag:
+            im = Image.open(config[3])
+            img = np.asarray(im)
+            img, dict, count = detect_and_count(img)
+            img = Image.fromarray(img)
+            detection_flag = True
     else:
         if detection_flag:
             img = data
