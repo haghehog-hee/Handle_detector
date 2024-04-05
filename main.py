@@ -31,20 +31,17 @@ if use_cpu == "CPU":
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 numbers_save_path = config[2]
 filename = "trial.xls"
-print("01")
 # label for displaying number of detections
 label = tk.Label(
     window, text="", font=("Calibri 15 bold")
 )
 label.pack()
-print("02")
 # set window size
 window.geometry("1024x720")
 
 # Camera has two channels Channel_1 - full high resolution, it is used for detection
 # Channel_2 - preview low resolution, used in normal "stream" mode
-cap2 = VCS(config[3])
-print("03")
+cap2 = VCS(stream_url=config[3])
 f_top = tk.Frame(window)
 f_bot = tk.Frame(window)
 f_top.pack()
@@ -68,7 +65,6 @@ def writeXLS(detections, file_path, num_classes):
     #         print(record.value)
 
 def readEthernet():
-    print("-1")
     global controller_ip
     connected = False
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -219,11 +215,9 @@ canvwidth = 960
 def video_stream():
     global cap2
     global detection_flag
-    print("1")
     if automation and readEthernet():
         on_click_btn1()
         detection_flag = False
-    print("2")
     if not cap2.isOpened():
         if not detection_flag:
             im = Image.open(config[3])
@@ -238,7 +232,6 @@ def video_stream():
             _, frame = cap2.read()
             cv2image = cvtColor(frame, COLOR_BGR2RGBA)
             img = Image.fromarray(cv2image)
-    print("3")
     img = img.resize((canvwidth, canvheight))
     imgtk = ImageTk.PhotoImage(image=img)
     stream_window.imgtk = imgtk
@@ -246,7 +239,6 @@ def video_stream():
     stream_window.after(300, video_stream)
 
 # initiate video stream
-print("0")
 video_stream()
 
 # run the tkinter main loop

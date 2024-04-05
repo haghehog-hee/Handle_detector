@@ -7,6 +7,7 @@ from object_detection.utils import ops as utils_ops
 from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 import cv2
+from ultralytics import YOLO
 import matplotlib.pyplot as plt
 from PIL import Image
 
@@ -24,6 +25,7 @@ if use_cpu == "CPU":
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 PATH_TO_MODEL_DIR = config[0]
+print(PATH_TO_MODEL_DIR)
 PATH_TO_LABELS = config[1]
 category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
 PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
@@ -31,11 +33,11 @@ PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
 # загрузка модели
 #print("lol")
 
-detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
-
+# detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
+detection_model = YOLO('C:\\Users\\MuhametovRD\\PycharmProjects\\YOLO\\runs\\detect\\train2\\weights\\best.pt')
 def horizontal_split(img, output_dict):
     rows, cols, ch = img.shape
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+    #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
     splitline = int(rows/2)
     flag = True
     while flag:
@@ -46,20 +48,21 @@ def horizontal_split(img, output_dict):
             y2 = int(box[2]*rows)
             #print(str(y1) + " _ "+ str(y2) +" _ "+ str(splitline))
             if splitline > y1 and splitline < y2:
-                #box_square = square(box[1],box[0],box[3],box[2])
-                #cut_square = square(box[1], box[0], box[3], splitline/rows)
-                #if box_square/cut_square < 20:
-                splitline -= 4
-                flag = True
+                box_square = square(box[1],box[0],box[3],box[2])
+                cut_square = square(box[1], box[0], box[3], splitline/rows)
+                if box_square/cut_square < 10:
+                    splitline -= 4
+                    flag = True
                 # cropped_image1 = img[0:splitline, 0:cols]
                 # im = Image.fromarray(cropped_image1)
                 # im = im.convert('RGB')
                 # im.save(test_save_path +str(img[0][0])+ str(splitline) +".jpg")
 
     if splitline < rows/3:
-        splitline = rows-1
+        splitline = rows-2
     cropped_image1 = img[0:splitline, 0:cols]
     cropped_image2 = img[splitline:rows, 0:cols]
+    print(splitline)
 
 
         #     flag = False
@@ -71,6 +74,7 @@ def horizontal_split(img, output_dict):
 
 
 def affine_transform(img):
+    #print(img.shape)
     rows, cols, ch = img.shape
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
     # camera is located not perpendicular to frame, so this code transforms image to somewhat straight
@@ -223,19 +227,16 @@ def detect_and_count(img):
         image1h1, detections1h1 = show_inference(detection_model, cropped1h1)
         image1h2, detections1h2 = show_inference(detection_model, cropped1h2)
         image1 = cv2.vconcat([image1h1, image1h2])
-        detections1 = merge_dict(detections1h1,detections1h2)
     if len(cropped2h1) > 1 and len(cropped2h2) > 1 :
         image2h1, detections2h1 = show_inference(detection_model, cropped2h1)
         image2h2, detections2h2 = show_inference(detection_model, cropped2h2)
         image2 = cv2.vconcat([image2h1, image2h2])
-        detections2 = merge_dict(detections2h1, detections2h2)
     if len(cropped3h1) > 1 and len(cropped3h2) > 1 :
         image3h1, detections3h1 = show_inference(detection_model, cropped3h1)
         image3h2, detections3h2 = show_inference(detection_model, cropped3h2)
         image3 = cv2.vconcat([image3h1, image3h2])
-        detections3 = merge_dict(detections3h1, detections3h2)
 
-    dicts = [detections1, detections2, detections3]
+    dicts = [detections1h1, detections1h2, detections2h1, detections2h2, detections3h1, detections3h2]
     image = cv2.hconcat([image1, image2, image3])
     detection_numbers = dict()
     for detections in dicts:
@@ -282,25 +283,47 @@ def run_inference_for_single_image(model, image):
 
     return output_dict
 
+# def show_inference(model, frame):
+#     # take the frame from webcam feed and convert that to array
+#     image_np = np.array(frame)
+#     image_np=np.compress([True, True, True, False], image_np, axis=2)
+#     # Actual detection.
+#     output_dict = run_inference_for_single_image(model, image_np)
+#     # Visualization of the results of a detection.
+#     output_dict = remove_overlap(output_dict)
+#     vis_util.visualize_boxes_and_labels_on_image_array(
+#         image_np,
+#         output_dict['detection_boxes'],
+#         output_dict['detection_classes'],
+#         output_dict['detection_scores'],
+#         category_index,
+#         max_boxes_to_draw=400,
+#         min_score_thresh=thresh,
+#         instance_masks=output_dict.get('detection_masks_reframed', None),
+#         use_normalized_coordinates=True,
+#         line_thickness=5)
+#
+#     return (image_np, output_dict)
+
 def show_inference(model, frame):
     # take the frame from webcam feed and convert that to array
     image_np = np.array(frame)
     image_np=np.compress([True, True, True, False], image_np, axis=2)
     # Actual detection.
-    output_dict = run_inference_for_single_image(model, image_np)
+    #output_dict = run_inference_for_single_image(model, image_np)
     # Visualization of the results of a detection.
+
+    results = model(image_np)
+    classes = results[0].boxes.cls.cpu().numpy()
+    boxes = results[0].boxes.xyxyn.cpu().numpy()
+    scores = results[0].boxes.conf.cpu().numpy()
+    rawscores = results[0].boxes.conf.cpu().numpy()
+    multiscores = results[0].boxes.conf.cpu().numpy()
+    rawboxes = results[0].boxes.xyxyn.cpu().numpy()
+    anchors = results[0].boxes.xyxyn.cpu().numpy()
+    output_dict = {'detection_classes': classes, 'raw_detection_boxes': rawboxes, 'raw_detection_scores': rawscores,
+         'detection_multiclass_scores': multiscores,
+         'detection_boxes': boxes, 'detection_scores': scores, 'detection_anchor_indices': anchors}
     output_dict = remove_overlap(output_dict)
-    vis_util.visualize_boxes_and_labels_on_image_array(
-        image_np,
-        output_dict['detection_boxes'],
-        output_dict['detection_classes'],
-        output_dict['detection_scores'],
-        category_index,
-        max_boxes_to_draw=400,
-        min_score_thresh=thresh,
-        instance_masks=output_dict.get('detection_masks_reframed', None),
-        use_normalized_coordinates=True,
-        line_thickness=5)
-
+    image_np = results[0].plot()
     return (image_np, output_dict)
-

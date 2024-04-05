@@ -8,17 +8,24 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import warnings
-from detection import remove_overlap, detect_and_count2
+from detection import remove_overlap, detect_and_count
 import cv2 as cv
 from Affine_transform import Atransform
 
 # пути к модели и меткам
+# PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph\\saved_model"
+# PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
+# IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\result\\"
+# IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\raw\\"
+# ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\annotations\\"
+# AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
 PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\result\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\raw\\"
-ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\annotations\\"
-AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
+IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\result\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\problematic affine\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\lol\\"
+ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\"
+AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\2\\"
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
 canny_ann_path = "C:\\Tensorflow\\Dataset\\testset\\"
 canny_img_save = "C:\\Tensorflow\\Dataset\\autoimages\\"
@@ -26,8 +33,9 @@ canny_ann_save = "C:\\Tensorflow\\Dataset\\test\\"
 flag = True
 test_flag = False
 agnostic_flag = False
-affine_flag = True
-thresh = 0.15
+affine_flag = False
+horizontal_split_flag = False
+thresh = 0.20
 
 IMAGE_PATHS = os.listdir(IMAGE_PATH)
 
@@ -130,62 +138,68 @@ def detection_to_text (detections, filename, image_path, width, height):
 
 def autoannotate(im, PATH):
     global IMAGE_SAVE_PATH
+    print(im.shape)
     height, width, ch = im.shape
 
     image_np = im
     #im = im.convert('RGB')
     #image_np = np.asarray(im)
     # преобразование в тензор
-    input_tensor = tf.convert_to_tensor(image_np)
 
     # добавление размерности пакета к изображению
-    input_tensor = input_tensor[tf.newaxis, ...]
+
 
     # выполнение предсказания
-    detections = detect_fn(input_tensor)
-    # конвертирование тензоров в массив numpy и удаление пакета
-    num_detections = int(detections.pop('num_detections'))
-    # print(num_detections)
-
-    detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
-    detections = remove_overlap(detections)
-    detections['num_detections'] = num_detections
-    # detection_to_text(detections, PATH2, image_path2, width, height)
-    if affine_flag:
-        path = AFFINE_SAVE_PATH + PATH
-        detection_to_text(detections, PATH, path, width, height)
+    if horizontal_split_flag:
+        img, a, b = detect_and_count(image_np)
+        img = Image.fromarray(img)
     else:
-        detection_to_text(detections, PATH, image_path, width, height)
+        input_tensor = tf.convert_to_tensor(image_np)
+        input_tensor = input_tensor[tf.newaxis, ...]
+        detections = detect_fn(input_tensor)
+        # конвертирование тензоров в массив numpy и удаление пакета
+        num_detections = int(detections.pop('num_detections'))
+        # print(num_detections)
 
-    # визуализация результатов предсказания на изображении
-    image_np_with_detections = image_np.copy()
-    viz_utils.visualize_boxes_and_labels_on_image_array(
-        image_np_with_detections,
-        detections['detection_boxes'],
-        detections['detection_classes'],
-        detections['detection_scores'],
-        category_index,
-        use_normalized_coordinates=True,
-        max_boxes_to_draw=None,
-        min_score_thresh=thresh,
-        agnostic_mode=agnostic_flag)
+        detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
+        detections = remove_overlap(detections)
+        detections['num_detections'] = num_detections
+    # detection_to_text(detections, PATH2, image_path2, width, height)
 
-    # вывод списка классов, обнаруженных на изображении
-    # print(detections['num_detections'])
-    d = dict()
-    for i in range(0, detections['detection_classes'].size):
-        if (detections['detection_scores'][i] >= thresh):
-            if (d.get(detections['detection_classes'][i]) == None):
-                d.setdefault(detections['detection_classes'][i], 1)
-            else:
-                d[detections['detection_classes'][i]] += 1
-    # print(d)
-    # отображение и сохранение изображения с визуализированными результатами
-    plt.figure()
-    plt.imshow(image_np_with_detections)
-    plt.show()
+        if affine_flag:
+            path = AFFINE_SAVE_PATH + PATH
+            detection_to_text(detections, PATH, path, width, height)
+        else:
+            detection_to_text(detections, PATH, image_path, width, height)
 
-    img = Image.fromarray(image_np_with_detections)
+            # визуализация результатов предсказания на изображении
+            image_np_with_detections = image_np.copy()
+            viz_utils.visualize_boxes_and_labels_on_image_array(
+                image_np_with_detections,
+                detections['detection_boxes'],
+                detections['detection_classes'],
+                detections['detection_scores'],
+                category_index,
+                use_normalized_coordinates=True,
+                max_boxes_to_draw=None,
+                min_score_thresh=thresh,
+                agnostic_mode=agnostic_flag)
+
+            # вывод списка классов, обнаруженных на изображении
+            # print(detections['num_detections'])
+            d = dict()
+            for i in range(0, detections['detection_classes'].size):
+                if (detections['detection_scores'][i] >= thresh):
+                    if (d.get(detections['detection_classes'][i]) == None):
+                        d.setdefault(detections['detection_classes'][i], 1)
+                    else:
+                        d[detections['detection_classes'][i]] += 1
+            # print(d)
+            # отображение и сохранение изображения с визуализированными результатами
+            plt.figure()
+            plt.imshow(image_np_with_detections)
+            plt.show()
+            img = Image.fromarray(image_np_with_detections)
     img.save(IMAGE_SAVE_PATH + "1" + PATH)
     # im2.save(image_path2 + PATH2)
     print('Done')
@@ -203,7 +217,7 @@ if flag:
 
         if affine_flag:
             im = cv.imread(image_path)
-            #im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
+            im = cv.cvtColor(im, cv.COLOR_BGR2RGBA)
             im1, im2, im3 = Atransform(im)
             PATH1 = "cropped1"+PATH
             PATH2 = "cropped2"+PATH
@@ -215,8 +229,10 @@ if flag:
             cv.imwrite(AFFINE_SAVE_PATH + PATH2, im2)
             cv.imwrite(AFFINE_SAVE_PATH + PATH3, im3)
         else:
-            im = Image.open(image_path)
-            im = im.convert('RGB')
+            # im = Image.open(image_path)
+            # im = im.convert('RGB')
+            im = cv.imread(image_path)
+            im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
             autoannotate(im, PATH)
 
 if not flag:
