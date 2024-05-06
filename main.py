@@ -21,6 +21,7 @@ client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # when the flag = True - app shows image with detection boxes
 detection_flag = False
 data = None
+# Loading and reading config file
 Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
@@ -47,6 +48,7 @@ f_bot = tk.Frame(window)
 f_top.pack()
 f_bot.pack()
 
+# writes detection results into excel file
 def writeXLS(detections, file_path, num_classes):
     bk = xlrd.open_workbook(file_path)
     book = copy(bk)
@@ -64,6 +66,7 @@ def writeXLS(detections, file_path, num_classes):
     #
     #         print(record.value)
 
+#Sends request to controller to check does it work in sequence
 def readEthernet():
     global controller_ip
     connected = False
@@ -81,7 +84,7 @@ def readEthernet():
     return True
 
 
-
+# button that commits single frame detection
 def on_click_btn1():
     global data
     global detection_flag
@@ -95,39 +98,8 @@ def on_click_btn1():
         data = Image.fromarray(data)
         _path = numbers_save_path + filename
         writeXLS(num_handles, _path, num_classes)
-        # file = open(_path, "r")
-        # text = file.readlines()
-        # text2 = ""
-        # list = ["0","1","2","3","4","5","6","7","8","9"]
-        # for line in text:
-        #     text2 += line + "\n"
-        #     if line[0]=="{" and len(line) > 2:
-        #         print(line)
-        #         line = line.split(", ")
-        #         for record in line:
-        #             dotflag = False
-        #             index = ""
-        #             count = ""
-        #             for i in range(len(record)):
-        #                 char = record[i]
-        #                 if char == ":":
-        #                     dotflag = True
-        #                 if char in list:
-        #                     if dotflag:
-        #                         count += char
-        #                     else:
-        #                         index += char
-        #             index2 = int(index)
-        #             count2 = int(count)
-        #             if (num_handles.get(int(index2)) == None):
-        #                 num_handles.setdefault(index2, count2)
-        #             else:
-        #                 num_handles[index2] += count2
-        # text2 += (str(datetime.now()) + """\n""")
-        # text2 += (numbers + """\n""")
-        # text2 += ("""За все время: """ + str(num_handles) + """\n""")
-        # file = open(_path, "w")
-        # file.write(text2)
+
+# automatic mode
 def on_click_btn_auto():
     global automation
     if automation:
@@ -137,7 +109,7 @@ def on_click_btn_auto():
         btn3.config(text="Автоматическое распознавание")
         automation = True
 
-
+# Open config menu
 def on_click_btn2():
     newWindow = tk.Toplevel(window)
     newWindow.title("Настройки")
@@ -151,7 +123,7 @@ def on_click_btn2():
     f_3.pack()
     f_4.pack()
 
-
+# Config menu buttons
     def on_click_conf1():
         config[0] = fd.askdirectory()
         label1["text"] = config[0]
@@ -210,7 +182,9 @@ stream_window.pack(side=tk.BOTTOM)
 canvheight = 540
 canvwidth = 960
 
-    # define video stream function
+# main video stream is an endless loop, updating every 300 ms
+# if there's no video stream, it will attempt to run with image from program directory
+# if in auto mode, it will wait for signal from controller
 
 def video_stream():
     global cap2

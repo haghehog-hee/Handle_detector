@@ -13,30 +13,26 @@ import cv2 as cv
 from Affine_transform import Atransform
 
 # пути к модели и меткам
-# PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph\\saved_model"
-# PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-# IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\result\\"
-# IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\raw\\"
-# ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\annotations\\"
-# AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
 PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph2\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
 IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\result2\\"
-# IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\problematic affine\\"
 IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\affine\\"
 ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\ann\\"
 AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\2\\"
+# пути сохранения при canny преобразовании
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
 canny_ann_path = "C:\\Tensorflow\\Dataset\\testset\\"
 canny_img_save = "C:\\Tensorflow\\Dataset\\autoimages\\"
 canny_ann_save = "C:\\Tensorflow\\Dataset\\test\\"
+
+
 flag = True
 test_flag = False
 agnostic_flag = False
 affine_flag = False
-horizontal_split_flag = False
-annotation_flag = True
-thresh = 0.15
+horizontal_split_flag = False # Если True - изборажение делится по горизонтали пополам
+annotation_flag = True # Сохранять ли аннотации
+thresh = 0.15 # Нижняя граница уверенности для отображения детекции
 
 IMAGE_PATHS = os.listdir(IMAGE_PATH)
 
