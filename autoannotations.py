@@ -19,12 +19,12 @@ from Affine_transform import Atransform
 # IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\raw\\"
 # ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\annotations\\"
 # AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
-PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph\\saved_model"
+PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph2\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\result\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\problematic affine\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\lol\\"
-ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\"
+IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\result2\\"
+# IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling january\\problematic affine\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\affine\\"
+ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\ann\\"
 AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\2\\"
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
 canny_ann_path = "C:\\Tensorflow\\Dataset\\testset\\"
@@ -35,7 +35,8 @@ test_flag = False
 agnostic_flag = False
 affine_flag = False
 horizontal_split_flag = False
-thresh = 0.20
+annotation_flag = True
+thresh = 0.15
 
 IMAGE_PATHS = os.listdir(IMAGE_PATH)
 
@@ -166,11 +167,13 @@ def autoannotate(im, PATH):
         detections['num_detections'] = num_detections
     # detection_to_text(detections, PATH2, image_path2, width, height)
 
+
         if affine_flag:
             path = AFFINE_SAVE_PATH + PATH
             detection_to_text(detections, PATH, path, width, height)
         else:
-            detection_to_text(detections, PATH, image_path, width, height)
+            if annotation_flag:
+                detection_to_text(detections, PATH, image_path, width, height)
 
             # визуализация результатов предсказания на изображении
             image_np_with_detections = image_np.copy()
@@ -183,6 +186,9 @@ def autoannotate(im, PATH):
                 use_normalized_coordinates=True,
                 max_boxes_to_draw=None,
                 min_score_thresh=thresh,
+                skip_scores=True,
+                skip_labels=True,
+                line_thickness=4,
                 agnostic_mode=agnostic_flag)
 
             # вывод списка классов, обнаруженных на изображении

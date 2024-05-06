@@ -3,8 +3,8 @@ import numpy as np
 import os
 
 #path = "C:\\Users\\MuhametovRD\\AppData\\Roaming\\EasyClient\\Picture\\"
-path = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\raw\\"
-savepath = "C:\\Tensorflow\\Dataset\\new labeling january\\new images for adding\\affine\\"
+path = "C:\\Tensorflow\\Dataset\\new labeling april\\raw\\"
+savepath = "C:\\Tensorflow\\Dataset\\new labeling april\\affine\\"
 thresh = 0
 IMAGE_PATHS = os.listdir(path)
 canny = False

@@ -132,8 +132,17 @@ def delete_detection(output_dict, i):
     output_dict['detection_anchor_indices'] = np.delete(output_dict['detection_anchor_indices'], i, 0)
     return output_dict
 
+
+def maximum(a, b):
+    if a >= b:
+        return a
+    else:
+        return b
+
 def remove_overlap(output_dict):
-    threshold = 0.12
+    threshold = 0.1
+    thresholdv =  0.05
+    thresholdv2 =  0.3
     global thresh
     output_dict1 = output_dict.copy()
     i = 0
@@ -146,7 +155,6 @@ def remove_overlap(output_dict):
     #     for l, score in enumerate(scores):
     #         if score < max(scores):
     #             scores[l] = 0
-
     while i < output_dict['detection_classes'].size-1:
         if output_dict['detection_scores'][i] < thresh:
             output_dict = delete_detection(output_dict, i)
@@ -163,7 +171,14 @@ def remove_overlap(output_dict):
             x2, y2, x22, y22 = output_dict['detection_boxes'][j]
             dist1 = distance(x1, y1, x2, y2)
             dist2 = distance(x11, y11, x22, y22)
-            if (dist1 + dist2) < threshold:
+            S1 = abs(x1-x11)
+            S2 = abs(y1 - y11)
+            S = maximum(S1, S2)
+            value1 = (dist1)/S
+            value2 = (dist2)/S
+            distx = abs((y1-y2)/(y1-y11))
+            disty = abs(x1-x2)
+            if value1 < threshold or value2 < threshold or (distx < thresholdv and disty < thresholdv2):
                 #print("dist:")
                 #print(dist2 + dist1)
                 kek+=1
@@ -173,6 +188,7 @@ def remove_overlap(output_dict):
                     output_dict = delete_detection(output_dict, j)
             j -= 1
         i += 1
+    print(kek)
     return output_dict
 
 
@@ -283,47 +299,68 @@ def run_inference_for_single_image(model, image):
 
     return output_dict
 
-# def show_inference(model, frame):
-#     # take the frame from webcam feed and convert that to array
-#     image_np = np.array(frame)
-#     image_np=np.compress([True, True, True, False], image_np, axis=2)
-#     # Actual detection.
-#     output_dict = run_inference_for_single_image(model, image_np)
-#     # Visualization of the results of a detection.
-#     output_dict = remove_overlap(output_dict)
-#     vis_util.visualize_boxes_and_labels_on_image_array(
-#         image_np,
-#         output_dict['detection_boxes'],
-#         output_dict['detection_classes'],
-#         output_dict['detection_scores'],
-#         category_index,
-#         max_boxes_to_draw=400,
-#         min_score_thresh=thresh,
-#         instance_masks=output_dict.get('detection_masks_reframed', None),
-#         use_normalized_coordinates=True,
-#         line_thickness=5)
-#
-#     return (image_np, output_dict)
-
 def show_inference(model, frame):
     # take the frame from webcam feed and convert that to array
     image_np = np.array(frame)
     image_np=np.compress([True, True, True, False], image_np, axis=2)
     # Actual detection.
-    #output_dict = run_inference_for_single_image(model, image_np)
+    output_dict = run_inference_for_single_image(model, image_np)
     # Visualization of the results of a detection.
-
-    results = model(image_np)
-    classes = results[0].boxes.cls.cpu().numpy()
-    boxes = results[0].boxes.xyxyn.cpu().numpy()
-    scores = results[0].boxes.conf.cpu().numpy()
-    rawscores = results[0].boxes.conf.cpu().numpy()
-    multiscores = results[0].boxes.conf.cpu().numpy()
-    rawboxes = results[0].boxes.xyxyn.cpu().numpy()
-    anchors = results[0].boxes.xyxyn.cpu().numpy()
-    output_dict = {'detection_classes': classes, 'raw_detection_boxes': rawboxes, 'raw_detection_scores': rawscores,
-         'detection_multiclass_scores': multiscores,
-         'detection_boxes': boxes, 'detection_scores': scores, 'detection_anchor_indices': anchors}
     output_dict = remove_overlap(output_dict)
-    image_np = results[0].plot()
+    vis_util.visualize_boxes_and_labels_on_image_array(
+        image_np,
+        output_dict['detection_boxes'],
+        output_dict['detection_classes'],
+        output_dict['detection_scores'],
+        category_index,
+        max_boxes_to_draw=400,
+        min_score_thresh=thresh,
+        instance_masks=output_dict.get('detection_masks_reframed', None),
+        use_normalized_coordinates=True,
+        line_thickness=5)
+
     return (image_np, output_dict)
+def show_inference(model, frame):
+    # take the frame from webcam feed and convert that to array
+    image_np = np.array(frame)
+    image_np=np.compress([True, True, True, False], image_np, axis=2)
+    # Actual detection.
+    output_dict = run_inference_for_single_image(model, image_np)
+    # Visualization of the results of a detection.
+    output_dict = remove_overlap(output_dict)
+    vis_util.visualize_boxes_and_labels_on_image_array(
+        image_np,
+        output_dict['detection_boxes'],
+        output_dict['detection_classes'],
+        output_dict['detection_scores'],
+        category_index,
+        max_boxes_to_draw=400,
+        min_score_thresh=thresh,
+        instance_masks=output_dict.get('detection_masks_reframed', None),
+        use_normalized_coordinates=True,
+        line_thickness=5)
+
+    return (image_np, output_dict)
+
+# def show_inference(model, frame):
+#     # take the frame from webcam feed and convert that to array
+#     image_np = np.array(frame)
+#     image_np=np.compress([True, True, True, False], image_np, axis=2)
+#     # Actual detection.
+#     #output_dict = run_inference_for_single_image(model, image_np)
+#     # Visualization of the results of a detection.
+#
+#     results = model(image_np)
+#     classes = results[0].boxes.cls.cpu().numpy()
+#     boxes = results[0].boxes.xyxyn.cpu().numpy()
+#     scores = results[0].boxes.conf.cpu().numpy()
+#     rawscores = results[0].boxes.conf.cpu().numpy()
+#     multiscores = results[0].boxes.conf.cpu().numpy()
+#     rawboxes = results[0].boxes.xyxyn.cpu().numpy()
+#     anchors = results[0].boxes.xyxyn.cpu().numpy()
+#     output_dict = {'detection_classes': classes, 'raw_detection_boxes': rawboxes, 'raw_detection_scores': rawscores,
+#          'detection_multiclass_scores': multiscores,
+#          'detection_boxes': boxes, 'detection_scores': scores, 'detection_anchor_indices': anchors}
+#     output_dict = remove_overlap(output_dict)
+#     image_np = results[0].plot()
+#     return (image_np, output_dict)
