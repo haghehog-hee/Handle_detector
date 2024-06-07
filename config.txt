@@ -5,3 +5,5 @@ rtsp://user08:Mrd12345678@2.1.3.33:554/1/1
 GPU
 0.2
 192.168.143.4
+rtsp://user08:Mrd12345678@2.1.11.65:554/1/1
+C:\Tensorflow\models\research\object_detection\interference_graphtest\saved_model

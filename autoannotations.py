@@ -8,16 +8,17 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import warnings
-from detection import remove_overlap, detect_and_count
+from detection import remove_overlap, detect_and_count, window_scan_detection
 import cv2 as cv
 from Affine_transform import Atransform
 
 # пути к модели и меткам
-PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graph2\\saved_model"
+PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graphtest\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\lol\\result2\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\affine\\"
-ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\new labeling april\\ann\\"
+IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\"
+# IMAGE_PATH = "C:\\Tensorflow\\Dataset\\lol\\resized\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\result\\"
+ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\test\\"
 AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\2\\"
 # пути сохранения при canny преобразовании
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
@@ -137,9 +138,9 @@ def autoannotate(im, PATH):
     global IMAGE_SAVE_PATH
     print(im.shape)
     height, width, ch = im.shape
-
+    # im = im.convert('RGB')
     image_np = im
-    #im = im.convert('RGB')
+
     #image_np = np.asarray(im)
     # преобразование в тензор
 
@@ -148,6 +149,7 @@ def autoannotate(im, PATH):
 
     # выполнение предсказания
     if horizontal_split_flag:
+        image_np = cv.cvtColor(image_np, cv.COLOR_BGR2RGBA)
         img, a, b = detect_and_count(image_np)
         img = Image.fromarray(img)
     else:
@@ -182,9 +184,9 @@ def autoannotate(im, PATH):
                 use_normalized_coordinates=True,
                 max_boxes_to_draw=None,
                 min_score_thresh=thresh,
-                skip_scores=True,
-                skip_labels=True,
-                line_thickness=4,
+                skip_scores=False,
+                skip_labels=False,
+                line_thickness=5,
                 agnostic_mode=agnostic_flag)
 
             # вывод списка классов, обнаруженных на изображении

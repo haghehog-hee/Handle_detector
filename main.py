@@ -1,5 +1,5 @@
 import tkinter as tk
-from detection import detect_and_count, dumb_detection
+from detection import detect_and_count, dumb_detection, detect_and_count_nosplit
 from cv2 import cvtColor, COLOR_BGR2RGBA
 from ffmpegcv import VideoCaptureStream as VCS
 from PIL import ImageTk, Image
@@ -12,8 +12,10 @@ import xlrd
 from xlutils.copy import copy
 import os
 import socket
+from Affine_transform import AtransformSide
+import tensorflow as tf
 
-
+Frame_flag = False
 window = tk.Tk()
 window.title("Detection")
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,6 +27,9 @@ data = None
 Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
+rack_check_treshold = 10
+rack_check_flag = False
+write_flag = False
 use_cpu = config[4]
 controller_ip = config[6]
 automation = False
@@ -43,6 +48,10 @@ window.geometry("1024x720")
 # Camera has two channels Channel_1 - full high resolution, it is used for detection
 # Channel_2 - preview low resolution, used in normal "stream" mode
 cap2 = VCS(stream_url=config[3])
+capside = VCS(stream_url=config[7])
+model = tf.saved_model.load(config[0])
+modelside = tf.saved_model.load(config[8])
+
 f_top = tk.Frame(window)
 f_bot = tk.Frame(window)
 f_top.pack()
@@ -54,6 +63,7 @@ def writeXLS(detections, file_path, num_classes):
     book = copy(bk)
     sh1 = bk.sheet_by_index(0)
     sh = book.get_sheet(0)
+    print("datetime")
     print(datetime.now())
     sh.write(0, sh1.ncols, str(datetime.now()))
     for x in range(1, num_classes+1):
@@ -68,6 +78,7 @@ def writeXLS(detections, file_path, num_classes):
 
 #Sends request to controller to check does it work in sequence
 def readEthernet():
+    return True
     global controller_ip
     connected = False
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -89,15 +100,36 @@ def on_click_btn1():
     global data
     global detection_flag
     global cap2
+    global Frame_flag
+    global rack_check_flag
     _, frame = cap2.read()
+    _, frame2 = capside.read()
+    frame2 = AtransformSide(frame2)
     detection_flag = not detection_flag
     if detection_flag:
-        data, num_handles, num_classes = detect_and_count(frame)
-        numbers = str(num_handles)
-        label["text"] = numbers
-        data = Image.fromarray(data)
-        _path = numbers_save_path + filename
-        writeXLS(num_handles, _path, num_classes)
+        data, num_handles, num_classes = detect_and_count(frame, model)
+        data2, num_handles2, num_classes2 = detect_and_count_nosplit(frame2, modelside)
+        handle_total = 0
+        for handle in num_handles:
+           handle_total += num_handles[handle]
+        print("handle total =" + str(handle_total))
+        if handle_total > rack_check_treshold and rack_check_flag == False:
+            numbers = str(num_handles)
+            label["text"] = numbers
+            _path = numbers_save_path + filename
+            writeXLS(num_handles, _path, num_classes)
+            _path = numbers_save_path + filename
+            writeXLS(num_handles2, _path, num_classes2)
+            rack_check_flag = True
+            print("handle total =" + str(handle_total))
+        elif handle_total < rack_check_treshold:
+            rack_check_flag = False
+
+        # numbers = str(num_handles)
+        # label["text"] = numbers
+        # data = Image.fromarray(data)
+        # _path = numbers_save_path + filename
+        # writeXLS(num_handles, _path, num_classes)
 
 # automatic mode
 def on_click_btn_auto():
@@ -190,27 +222,34 @@ def video_stream():
     global cap2
     global detection_flag
     if automation and readEthernet():
-        on_click_btn1()
         detection_flag = False
+        on_click_btn1()
+        img = data
+        print("kkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+        # img = Image.fromarray(im)
     if not cap2.isOpened():
         if not detection_flag:
             im = Image.open(config[3])
             img = np.asarray(im)
             img, dict, count = detect_and_count(img)
-            img = Image.fromarray(img)
+            # img = Image.fromarray(img)
             detection_flag = True
     else:
-        if detection_flag:
+        if rack_check_flag:
             img = data
         else:
             _, frame = cap2.read()
-            cv2image = cvtColor(frame, COLOR_BGR2RGBA)
-            img = Image.fromarray(cv2image)
+            img = cvtColor(frame, COLOR_BGR2RGBA)
+
+
+        # img = Image.fromarray(cv2image)
+    img = Image.fromarray(img)
     img = img.resize((canvwidth, canvheight))
+
     imgtk = ImageTk.PhotoImage(image=img)
     stream_window.imgtk = imgtk
     stream_window.configure(image=imgtk)
-    stream_window.after(300, video_stream)
+    stream_window.after(10000, video_stream)
 
 # initiate video stream
 video_stream()

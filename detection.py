@@ -34,7 +34,7 @@ PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
 #print("lol")
 
 # detection_model = tf.saved_model.load(PATH_TO_SAVED_MODEL)
-detection_model = YOLO('C:\\Users\\MuhametovRD\\PycharmProjects\\YOLO\\runs\\detect\\train2\\weights\\best.pt')
+# detection_model = YOLO('C:\\Users\\MuhametovRD\\PycharmProjects\\YOLO\\runs\\detect\\train2\\weights\\best.pt')
 def horizontal_split(img, output_dict):
     rows, cols, ch = img.shape
     #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
@@ -50,7 +50,7 @@ def horizontal_split(img, output_dict):
             if splitline > y1 and splitline < y2:
                 box_square = square(box[1],box[0],box[3],box[2])
                 cut_square = square(box[1], box[0], box[3], splitline/rows)
-                if box_square/cut_square < 10:
+                if box_square/cut_square < 5:
                     splitline -= 4
                     flag = True
                 # cropped_image1 = img[0:splitline, 0:cols]
@@ -62,7 +62,7 @@ def horizontal_split(img, output_dict):
         splitline = rows-2
     cropped_image1 = img[0:splitline, 0:cols]
     cropped_image2 = img[splitline:rows, 0:cols]
-    print(splitline)
+    # print(splitline)
 
 
         #     flag = False
@@ -188,7 +188,7 @@ def remove_overlap(output_dict):
                     output_dict = delete_detection(output_dict, j)
             j -= 1
         i += 1
-    print(kek)
+    # print(kek)
     return output_dict
 
 
@@ -222,7 +222,7 @@ def merge_dict(dict1, dict2):
     numpy.append(dict1['detection_scores'],dict2['detection_scores'])
     numpy.append(dict1['detection_anchor_indices'],dict2['detection_anchor_indices'])
     return dict1
-def detect_and_count(img):
+def detect_and_count(img, detection_model):
     global thresh
 
     # model efficientdetd0 can only process images of size 512x512,
@@ -265,6 +265,18 @@ def detect_and_count(img):
     return image, detection_numbers, detections['detection_classes'].size
 
 
+def detect_and_count_nosplit(img, detection_model):
+    global thresh
+    image, detections = show_inference(detection_model, img)
+    detections = remove_overlap(detections)
+    detection_numbers = dict()
+    for i in range(0, detections['detection_classes'].size):
+        if detections['detection_scores'][i] >= thresh:
+            if detection_numbers.get(detections['detection_classes'][i]) is None:
+                detection_numbers.setdefault(detections['detection_classes'][i], 1)
+            else:
+                detection_numbers[detections['detection_classes'][i]] += 1
+    return image, detection_numbers, detections['detection_classes'].size
 def run_inference_for_single_image(model, image):
     image = np.asarray(image)
     # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
@@ -341,6 +353,49 @@ def show_inference(model, frame):
         line_thickness=5)
 
     return (image_np, output_dict)
+
+def window_scan_detection(img):
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    cols, rows, ch = img.shape
+    print("img shape = " + str(img.shape))
+    size = 1000
+    X = 0
+    Y = 0
+    confidence_threshold = 0.7
+    step = round(size * 0.8)
+    flag = True
+    while flag:
+        frame = img[X:X+size, Y:Y+size]
+        print("X = " + str(X))
+        print("Y = " + str(Y))
+        print("shape = " + str(frame.shape))
+        image, detections = show_inference(detection_model, frame)
+        img[X:X+size, Y:Y+size] = image
+        # detections = remove_overlap(detections)
+        # i = 0
+        # while i < detections['detection_classes'].size-1:
+        #     x1, y1, x11, y11 = detections['detection_boxes'][i]
+        #     x1 = X + round(x1*size)
+        #     y1 = Y + round(y1*size)
+        #     x11 = X + round(x11*size)
+        #     y11 = Y + round(y11*size)
+        #     if detections['detection_scores'][i] > confidence_threshold:
+        #         img[x1:x11, y1:y11] = (0, 0, 0)
+        #     i += 1
+        X += step
+        if X >= cols:
+            X = 0
+            Y = Y+step
+        elif X + step > cols:
+            X = cols - step
+        if Y >= rows:
+            flag = False
+        elif Y + step > rows:
+            Y = rows - step
+
+    return img
+
+
 
 # def show_inference(model, frame):
 #     # take the frame from webcam feed and convert that to array
