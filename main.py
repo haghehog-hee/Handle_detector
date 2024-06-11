@@ -1,6 +1,7 @@
 import tkinter as tk
 from detection import detect_and_count, dumb_detection, detect_and_count_nosplit
 from cv2 import cvtColor, COLOR_BGR2RGBA
+from cv2 import VideoCapture, CAP_FFMPEG, imwrite
 from ffmpegcv import VideoCaptureStream as VCS
 from PIL import ImageTk, Image
 from tkinter import filedialog as fd
@@ -10,11 +11,12 @@ import numpy as np
 from datetime import datetime
 import xlrd
 from xlutils.copy import copy
-import os
+from os import environ
 import socket
 from Affine_transform import AtransformSide
 import tensorflow as tf
 
+img_path = "clipboard02.jpg"
 Frame_flag = False
 window = tk.Tk()
 window.title("Detection")
@@ -28,13 +30,15 @@ Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
 rack_check_treshold = 10
-rack_check_flag = False
+rack_check_flag = 0
 write_flag = False
 use_cpu = config[4]
 controller_ip = config[6]
 automation = False
+img_save_path = config[9]
+YOLO_model = config[10]
 if use_cpu == "CPU":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    environ["CUDA_VISIBLE_DEVICES"] = "-1"
 numbers_save_path = config[2]
 filename = "trial.xls"
 # label for displaying number of detections
@@ -47,8 +51,8 @@ window.geometry("1024x720")
 
 # Camera has two channels Channel_1 - full high resolution, it is used for detection
 # Channel_2 - preview low resolution, used in normal "stream" mode
-cap2 = VCS(stream_url=config[3])
-capside = VCS(stream_url=config[7])
+cap2 = VideoCapture(config[3])
+capside = VideoCapture(config[7])
 model = tf.saved_model.load(config[0])
 modelside = tf.saved_model.load(config[8])
 
@@ -94,36 +98,51 @@ def readEthernet():
         from_server = client.recv(5050)
     return True
 
-
-# button that commits single frame detection
-def on_click_btn1():
+def launch_detection():
     global data
-    global detection_flag
     global cap2
+    global capside
     global Frame_flag
     global rack_check_flag
-    _, frame = cap2.read()
-    _, frame2 = capside.read()
-    frame2 = AtransformSide(frame2)
-    detection_flag = not detection_flag
-    if detection_flag:
+    success, frame = cap2.read()
+    success2, frame2 = capside.read()
+
+    if success and success2:
+        frame2 = AtransformSide(frame2)
         data, num_handles, num_classes = detect_and_count(frame, model)
         data2, num_handles2, num_classes2 = detect_and_count_nosplit(frame2, modelside)
         handle_total = 0
         for handle in num_handles:
-           handle_total += num_handles[handle]
+            handle_total += num_handles[handle]
         print("handle total =" + str(handle_total))
-        if handle_total > rack_check_treshold and rack_check_flag == False:
-            numbers = str(num_handles)
-            label["text"] = numbers
-            _path = numbers_save_path + filename
-            writeXLS(num_handles, _path, num_classes)
-            _path = numbers_save_path + filename
-            writeXLS(num_handles2, _path, num_classes2)
-            rack_check_flag = True
-            print("handle total =" + str(handle_total))
+        print("rack check flag =" + str(rack_check_flag))
+        if handle_total > rack_check_treshold:
+            rack_check_flag += 1
+            if rack_check_flag == 2:
+                numbers = str(num_handles)
+                label["text"] = numbers
+                _path = numbers_save_path + filename
+                writeXLS(num_handles, _path, num_classes)
+                writeXLS(num_handles2, _path, num_classes2)
+                current_time = str(datetime.now()).replace(":", "_")
+                imwrite(img_save_path + "\\" + "at" + current_time + "1.jpg", frame)
+                imwrite(img_save_path + "\\" + "at" + current_time + "2.jpg", frame2)
         elif handle_total < rack_check_treshold:
-            rack_check_flag = False
+            rack_check_flag = 0
+    else:
+        cap2.release()
+        cap2 = VideoCapture(config[3])
+        capside.release()
+        capside = VideoCapture(config[7])
+        print("STREAM CAP ERROR")
+
+# button that commits single frame detection
+def on_click_btn1():
+    global detection_flag
+    detection_flag = not detection_flag
+    if detection_flag:
+        launch_detection()
+
 
         # numbers = str(num_handles)
         # label["text"] = numbers
@@ -221,13 +240,15 @@ canvwidth = 960
 def video_stream():
     global cap2
     global detection_flag
+    im = Image.open(img_path)
+    img = np.asarray(im)
     if automation and readEthernet():
-        detection_flag = False
-        on_click_btn1()
+        launch_detection()
         img = data
-        print("kkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+        # print("auto tick")
         # img = Image.fromarray(im)
     if not cap2.isOpened():
+        print("cap not opened")
         if not detection_flag:
             im = Image.open(config[3])
             img = np.asarray(im)
@@ -238,8 +259,13 @@ def video_stream():
         if rack_check_flag:
             img = data
         else:
-            _, frame = cap2.read()
-            img = cvtColor(frame, COLOR_BGR2RGBA)
+            success, frame = cap2.read()
+            if success:
+                # print("show")
+                img = cvtColor(frame, COLOR_BGR2RGBA)
+            else:
+                cap2.release()
+                cap2 = VideoCapture(config[3])
 
 
         # img = Image.fromarray(cv2image)
