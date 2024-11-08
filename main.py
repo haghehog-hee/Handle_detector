@@ -1,6 +1,6 @@
 import tkinter as tk
-from detection import detect_and_count, dumb_detection, detect_and_count_nosplit
-from cv2 import cvtColor, COLOR_BGR2RGBA
+from detection import detect_and_count, dumb_detection, detect_and_count_nosplit, yolo_detection, YOLO_segmentation, detect_and_count_YOLO
+from cv2 import cvtColor, COLOR_BGR2RGBA, imread
 from cv2 import VideoCapture, CAP_FFMPEG, imwrite
 from ffmpegcv import VideoCaptureStream as VCS
 from PIL import ImageTk, Image
@@ -15,6 +15,8 @@ from os import environ
 import socket
 from Affine_transform import AtransformSide
 import tensorflow as tf
+from ultralytics import YOLO
+import cv2
 
 img_path = "clipboard02.jpg"
 Frame_flag = False
@@ -25,18 +27,23 @@ client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # when the flag = True - app shows image with detection boxes
 detection_flag = False
 data = None
+data2 = None
+
 # Loading and reading config file
 Config_path = "config.txt"
 config = open(Config_path).read()
 config = config.splitlines()
-rack_check_treshold = 10
+rack_check_treshold =  20
+no_rack_treshold =  3
 rack_check_flag = 0
+no_rack_flag = 0
 write_flag = False
 use_cpu = config[4]
 controller_ip = config[6]
-automation = False
+automation = True
 img_save_path = config[9]
-YOLO_model = config[10]
+YOLO_model_path = config[10]
+YOLO_model = YOLO(YOLO_model_path)
 if use_cpu == "CPU":
     environ["CUDA_VISIBLE_DEVICES"] = "-1"
 numbers_save_path = config[2]
@@ -54,12 +61,17 @@ window.geometry("1024x720")
 cap2 = VideoCapture(config[3])
 capside = VideoCapture(config[7])
 model = tf.saved_model.load(config[0])
-modelside = tf.saved_model.load(config[8])
+modelside = YOLO(config[8])
 
 f_top = tk.Frame(window)
 f_bot = tk.Frame(window)
 f_top.pack()
 f_bot.pack()
+
+data = imread(img_path)
+data = np.asarray(data)
+data2 = imread(img_path)
+data2 = np.asarray(data2)
 
 # writes detection results into excel file
 def writeXLS(detections, file_path, num_classes):
@@ -69,10 +81,10 @@ def writeXLS(detections, file_path, num_classes):
     sh = book.get_sheet(0)
     print("datetime")
     print(datetime.now())
-    sh.write(0, sh1.ncols, str(datetime.now()))
+    sh.write(sh1.nrows, 0, str(datetime.now()))
     for x in range(1, num_classes+1):
         if x in detections:
-            sh.write(x, sh1.ncols, detections[x])
+            sh.write(sh1.nrows, x, detections[x])
     book.save(file_path)
     # for y in range(sh.ncols):
     #     col = (sh.col(y))
@@ -100,35 +112,55 @@ def readEthernet():
 
 def launch_detection():
     global data
+    global data2
     global cap2
     global capside
     global Frame_flag
     global rack_check_flag
+    global no_rack_flag
+    for i in range(30):
+        kek = cap2.grab()
+    for i in range(30):
+        kek = capside.grab()
     success, frame = cap2.read()
     success2, frame2 = capside.read()
-
     if success and success2:
-        frame2 = AtransformSide(frame2)
-        data, num_handles, num_classes = detect_and_count(frame, model)
-        data2, num_handles2, num_classes2 = detect_and_count_nosplit(frame2, modelside)
-        handle_total = 0
-        for handle in num_handles:
-            handle_total += num_handles[handle]
-        print("handle total =" + str(handle_total))
-        print("rack check flag =" + str(rack_check_flag))
-        if handle_total > rack_check_treshold:
-            rack_check_flag += 1
-            if rack_check_flag == 2:
+        num_handles = yolo_detection(frame, YOLO_model)
+        # handle_total = num_handles
+        if num_handles >= rack_check_treshold:
+            rack_check_flag +=1
+            print(rack_check_flag)
+            if rack_check_flag == 10:
+                frame = cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # frame2 = cvtColor(frame2, cv2.COLOR_BGR2RGB)
+                data, num_handles, num_classes = detect_and_count(frame, model)
+                data2, num_handles2 = detect_and_count_YOLO(frame2, modelside, modelside)
+                # handle_total = 0
+                # for handle in num_handles:
+                #     handle_total += num_handles[handle]
+                # print("handle total =" + str(handle_total))
+                # print("rack check flag =" + str(rack_check_flag))
+                # if handle_total > rack_check_treshold:
+                #     rack_check_flag += 1
+                    # if rack_check_flag == 2:
                 numbers = str(num_handles)
                 label["text"] = numbers
                 _path = numbers_save_path + filename
                 writeXLS(num_handles, _path, num_classes)
-                writeXLS(num_handles2, _path, num_classes2)
+                writeXLS(num_handles2, _path, num_classes)
                 current_time = str(datetime.now()).replace(":", "_")
                 imwrite(img_save_path + "\\" + "at" + current_time + "1.jpg", frame)
+                imwrite(img_save_path + "\\" + "detected" + current_time + "1.jpg", data)
                 imwrite(img_save_path + "\\" + "at" + current_time + "2.jpg", frame2)
-        elif handle_total < rack_check_treshold:
-            rack_check_flag = 0
+                imwrite(img_save_path + "\\" + "detected" + current_time + "2.jpg", data2)
+        elif num_handles < rack_check_treshold:
+            no_rack_flag += 1
+            if no_rack_flag >= no_rack_treshold:
+                data = frame
+                # data = cvtColor(data, COLOR_BGR2RGBA)
+                data2 = frame2
+                # data2 = cvtColor(data2, COLOR_BGR2RGBA)
+                rack_check_flag = 0
     else:
         cap2.release()
         cap2 = VideoCapture(config[3])
@@ -227,11 +259,14 @@ btn3 = tk.Button(f_top, text="Авторежим выключен", command=on_c
 btn3.pack(side=tk.RIGHT)
 
 stream_window = tk.Label(f_bot)
+stream_window2 = tk.Label(f_bot)
 stream_window.pack(side=tk.BOTTOM)
+stream_window2.pack(side=tk.BOTTOM)
 
 # define canvas dimensions
-canvheight = 540
-canvwidth = 960
+widthscale = 960/540
+canvheight = 700
+canvwidth = canvheight * widthscale
 
 # main video stream is an endless loop, updating every 300 ms
 # if there's no video stream, it will attempt to run with image from program directory
@@ -239,25 +274,35 @@ canvwidth = 960
 
 def video_stream():
     global cap2
+    global capside
     global detection_flag
-    im = Image.open(img_path)
+    im = imread(img_path)
     img = np.asarray(im)
+    img2 = img
     if automation and readEthernet():
         launch_detection()
         img = data
+        img2 = data2
         # print("auto tick")
         # img = Image.fromarray(im)
     if not cap2.isOpened():
         print("cap not opened")
-        if not detection_flag:
-            im = Image.open(config[3])
-            img = np.asarray(im)
-            img, dict, count = detect_and_count(img)
-            # img = Image.fromarray(img)
-            detection_flag = True
+        cap2.release()
+        cap2 = VideoCapture(config[3])
+        capside.release()
+        capside = VideoCapture(config[7])
+        im = Image.open(img_path)
+        img = np.asarray(im)
+    #     if not detection_flag:
+    #         im = Image.open(config[3])
+    #         img = np.asarray(im)
+    #         img, dict, count = detect_and_count(img)
+    #         # img = Image.fromarray(img)
+    #         detection_flag = True
     else:
         if rack_check_flag:
             img = data
+            img2 = data2
         else:
             success, frame = cap2.read()
             if success:
@@ -270,12 +315,17 @@ def video_stream():
 
         # img = Image.fromarray(cv2image)
     img = Image.fromarray(img)
-    img = img.resize((canvwidth, canvheight))
+    img2 = Image.fromarray(img2)
+    img = img.resize((int(canvwidth/2), int(canvheight/2)))
+    img2 = img2.resize((int(canvwidth/2), int(canvheight/2)))
 
     imgtk = ImageTk.PhotoImage(image=img)
+    imgtk2 = ImageTk.PhotoImage(image=img2)
     stream_window.imgtk = imgtk
+    stream_window2.imgtk = imgtk2
     stream_window.configure(image=imgtk)
-    stream_window.after(10000, video_stream)
+    stream_window2.configure(image=imgtk2)
+    stream_window.after(500, video_stream)
 
 # initiate video stream
 video_stream()

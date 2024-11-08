@@ -1,8 +1,8 @@
 import os
 import re
 
-images_path = "C:\\Tensorflow\\Dataset\\april\\test\\img\\"
-annotations_path = "C:\\Tensorflow\\Dataset\\april\\test\\ann\\"
+images_path = "C:\\Tensorflow\\Dataset\\Done\\IMG\\"
+annotations_path = "C:\\Tensorflow\\Dataset\\Done\\ANN\\"
 pathing_flag = True
 naming_flag = False
 ann_paths = os.listdir(annotations_path)

@@ -13,12 +13,12 @@ import cv2 as cv
 from Affine_transform import Atransform
 
 # пути к модели и меткам
-PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graphtest\\saved_model"
+PATH_TO_MODEL_DIR = "C:\\Tensorflow\\models\\research\\object_detection\\interference_graphGENERATED\\saved_model"
 PATH_TO_LABELS = "C:\\Tensorflow\\Dataset\\label_map2.pbtxt"
-IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\"
+IMAGE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\window\\"
 # IMAGE_PATH = "C:\\Tensorflow\\Dataset\\lol\\resized\\"
-IMAGE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\result\\"
-ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\test\\"
+IMAGE_PATH = "C:\\Tensorflow\\Dataset\\greenscreen\\val\\"
+ANNOTATION_SAVE_PATH = "C:\\Tensorflow\\Dataset\\AffineSide\\window\\ann2\\"
 AFFINE_SAVE_PATH = "C:\\Tensorflow\\Dataset\\2\\"
 # пути сохранения при canny преобразовании
 canny_img_path = "C:\\Tensorflow\\Dataset\\testimages\\"
@@ -27,32 +27,7 @@ canny_img_save = "C:\\Tensorflow\\Dataset\\autoimages\\"
 canny_ann_save = "C:\\Tensorflow\\Dataset\\test\\"
 
 
-flag = True
-test_flag = False
-agnostic_flag = False
-affine_flag = False
-horizontal_split_flag = False # Если True - изборажение делится по горизонтали пополам
-annotation_flag = True # Сохранять ли аннотации
-thresh = 0.15 # Нижняя граница уверенности для отображения детекции
 
-IMAGE_PATHS = os.listdir(IMAGE_PATH)
-
-# путь к модели
-PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
-print('Loading model...', end='')
-start_time = time.time()
-
-# загрузка модели
-detect_fn = tf.saved_model.load(PATH_TO_SAVED_MODEL)
-end_time = time.time()
-elapsed_time = end_time - start_time
-print('Done! Took {} seconds'.format(elapsed_time))
-
-# создание словаря для меток
-category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
-
-# игнорирование предупреждений Matplotlib
-warnings.filterwarnings('ignore')
 
 
 def to_canny(image_path, annotation_path,img_save_path,ann_save_path):
@@ -95,9 +70,10 @@ def load_image_into_numpy_array(IMAGE_PATH):
         массив numpy uint8, формы (высота, ширина, 3)
     """
     return np.array(Image.open(IMAGE_PATH))
-def detection_to_text (detections, filename, image_path, width, height):
+def detection_to_text (detections, filename, image_path, width, height, ANNOTATION_SAVE_PATH, thresh = 0, scale_flag = True):
     _path = ANNOTATION_SAVE_PATH + filename.replace('.jpg', '.xml')
     file = open(_path, "w")
+
     _text = '''<annotation>
 	<folder>autoannotations</folder>
 	<filename>''' + filename + '''</filename>
@@ -115,6 +91,16 @@ def detection_to_text (detections, filename, image_path, width, height):
         if detections['detection_scores'][i] > thresh:
             box = detections['detection_boxes'][i]
             type = detections['detection_classes'][i]
+            if scale_flag:
+                xmin = str(box[1] * width)
+                ymin = str(box[0] * height)
+                xmax = str(box[3] * width)
+                ymax = str(box[2] * height)
+            else:
+                xmin = str(box[1])
+                ymin = str(box[0])
+                xmax = str(box[3])
+                ymax = str(box[2])
             text = \
                 '''<object> 
                        <name>handle''' + str(type).replace(".0","") + '''</name>
@@ -122,10 +108,10 @@ def detection_to_text (detections, filename, image_path, width, height):
                        <truncated>0</truncated> 
                        <difficult>0</difficult> 
                        <bndbox> 
-                           <xmin>''' + str(box[1]*width) + '''</xmin> 
-                           <ymin>''' + str(box[0]*height) + '''</ymin> 
-                           <xmax>''' + str(box[3]*width) + '''</xmax> 
-                           <ymax>''' + str(box[2]*height) + '''</ymax> 
+                           <xmin>''' + xmin + '''</xmin> 
+                           <ymin>''' + ymin + '''</ymin> 
+                           <xmax>''' + xmax + '''</xmax> 
+                           <ymax>''' + ymax + '''</ymax> 
                        </bndbox> 
                    </object>'''
             _text += text
@@ -136,7 +122,7 @@ def detection_to_text (detections, filename, image_path, width, height):
 
 def autoannotate(im, PATH):
     global IMAGE_SAVE_PATH
-    print(im.shape)
+    # print(im.shape)
     height, width, ch = im.shape
     # im = im.convert('RGB')
     image_np = im
@@ -150,15 +136,16 @@ def autoannotate(im, PATH):
     # выполнение предсказания
     if horizontal_split_flag:
         image_np = cv.cvtColor(image_np, cv.COLOR_BGR2RGBA)
-        img, a, b = detect_and_count(image_np)
+        img, a, b = detect_and_count(image_np, detect_fn, save = True, save_path = AFFINE_SAVE_PATH, filename = PATH)
         img = Image.fromarray(img)
     else:
+        # image_np = cv.cvtColor(image_np, cv.COLOR_BGR2RGBA)
         input_tensor = tf.convert_to_tensor(image_np)
         input_tensor = input_tensor[tf.newaxis, ...]
         detections = detect_fn(input_tensor)
         # конвертирование тензоров в массив numpy и удаление пакета
         num_detections = int(detections.pop('num_detections'))
-        # print(num_detections)
+        print(num_detections)
 
         detections = {key: value[0, :num_detections].numpy() for key, value in detections.items()}
         detections = remove_overlap(detections)
@@ -168,10 +155,10 @@ def autoannotate(im, PATH):
 
         if affine_flag:
             path = AFFINE_SAVE_PATH + PATH
-            detection_to_text(detections, PATH, path, width, height)
+            detection_to_text(detections, PATH, path, width, height, ANNOTATION_SAVE_PATH = ANNOTATION_SAVE_PATH )
         else:
             if annotation_flag:
-                detection_to_text(detections, PATH, image_path, width, height)
+                detection_to_text(detections, PATH, image_path, width, height, ANNOTATION_SAVE_PATH = ANNOTATION_SAVE_PATH )
 
             # визуализация результатов предсказания на изображении
             image_np_with_detections = image_np.copy()
@@ -210,37 +197,64 @@ def autoannotate(im, PATH):
 
 
 
+if __name__ == "__main__":
+    flag = True
+    test_flag = False
+    agnostic_flag = False
+    affine_flag = False
+    horizontal_split_flag = True
+    # Если True - изборажение делится по горизонтали пополам
+    annotation_flag = True  # Сохранять ли аннотации
+    thresh = 0.2  # Нижняя граница уверенности для отображения детекции
 
+    IMAGE_PATHS = os.listdir(IMAGE_PATH)
 
-if flag:
-    for PATH in IMAGE_PATHS:
-        image_path = IMAGE_PATH + PATH
-        print('Running inference for {}... '.format(image_path), end='')
-        # загрузка изображения
-        #image_np = load_image_into_numpy_array(image_path)
+    # путь к модели
+    PATH_TO_SAVED_MODEL = PATH_TO_MODEL_DIR
+    print('Loading model...', end='')
+    start_time = time.time()
 
-        if affine_flag:
-            im = cv.imread(image_path)
-            im = cv.cvtColor(im, cv.COLOR_BGR2RGBA)
-            im1, im2, im3 = Atransform(im)
-            PATH1 = "cropped1"+PATH
-            PATH2 = "cropped2"+PATH
-            PATH3 = "cropped3"+PATH
-            autoannotate(im1, PATH1)
-            autoannotate(im2, PATH2)
-            autoannotate(im3, PATH3)
-            cv.imwrite(AFFINE_SAVE_PATH + PATH1, im1)
-            cv.imwrite(AFFINE_SAVE_PATH + PATH2, im2)
-            cv.imwrite(AFFINE_SAVE_PATH + PATH3, im3)
-        else:
-            # im = Image.open(image_path)
-            # im = im.convert('RGB')
-            im = cv.imread(image_path)
-            im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
-            autoannotate(im, PATH)
+    # загрузка модели
+    detect_fn = tf.saved_model.load(PATH_TO_SAVED_MODEL)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print('Done! Took {} seconds'.format(elapsed_time))
 
-if not flag:
-    to_canny(canny_img_path,canny_ann_path, canny_img_save, canny_ann_save)
+    # создание словаря для меток
+    category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
+
+    # игнорирование предупреждений Matplotlib
+    warnings.filterwarnings('ignore')
+
+    if flag:
+        for PATH in IMAGE_PATHS:
+            image_path = IMAGE_PATH + PATH
+            print('Running inference for {}... '.format(image_path), end='')
+            # загрузка изображения
+            #image_np = load_image_into_numpy_array(image_path)
+
+            if affine_flag:
+                im = cv.imread(image_path)
+                im = cv.cvtColor(im, cv.COLOR_BGR2RGBA)
+                im1, im2, im3 = Atransform(im)
+                PATH1 = "cropped1"+PATH
+                PATH2 = "cropped2"+PATH
+                PATH3 = "cropped3"+PATH
+                autoannotate(im1, PATH1)
+                autoannotate(im2, PATH2)
+                autoannotate(im3, PATH3)
+                cv.imwrite(AFFINE_SAVE_PATH + PATH1, im1)
+                cv.imwrite(AFFINE_SAVE_PATH + PATH2, im2)
+                cv.imwrite(AFFINE_SAVE_PATH + PATH3, im3)
+            else:
+                # im = Image.open(image_path)
+                # im = im.convert('RGB')
+                im = cv.imread(image_path)
+                im = cv.cvtColor(im, cv.COLOR_BGR2RGB)
+                autoannotate(im, PATH)
+
+    if not flag:
+        to_canny(canny_img_path,canny_ann_path, canny_img_save, canny_ann_save)
 
 # if flag:
 #     for PATH in IMAGE_PATHS:
